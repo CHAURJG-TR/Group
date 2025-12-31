@@ -3,189 +3,71 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>課堂分組系統 PRO</title>
+<title>課堂分組系統 PRO+</title>
 
 <style>
 body {
   font-family: "Microsoft JhengHei", Arial;
-  background: #eef2f7;
-  padding: 20px;
+  background:#eef2f7;
+  padding:20px;
 }
-h1 { text-align: center; }
+h1{text-align:center;}
 
-textarea, input {
-  width: 100%;
-  font-size: 18px;
-  padding: 10px;
-  margin: 6px 0;
+button{
+  font-size:18px;
+  padding:12px 18px;
+  margin:5px;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
 }
+.primary{background:#2563eb;color:white;}
+.gray{background:#6b7280;color:white;}
 
-button {
-  font-size: 18px;
-  padding: 12px 18px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  margin: 5px;
-}
-
-.primary { background:#2563eb;color:white; }
-.warn { background:#dc2626;color:white; }
-.gray { background:#6b7280;color:white; }
-
-.group {
+.group{
   background:white;
-  padding:15px;
-  margin:10px 0;
-  border-radius:12px;
-  box-shadow:0 3px 8px rgba(0,0,0,.15);
-  font-size:28px;
+  margin:12px 0;
+  padding:16px;
+  border-radius:14px;
+  font-size:32px;
+  animation: pop .5s ease;
+  box-shadow:0 4px 10px rgba(0,0,0,.15);
 }
 
-.member {
+.member{
   display:inline-block;
   padding:8px 14px;
   margin:6px;
   background:#e0e7ff;
-  border-radius:10px;
-  cursor:grab;
+  border-radius:12px;
 }
 
-.fullscreen .controls,
-.fullscreen textarea,
-.fullscreen input {
-  display:none;
+@keyframes pop{
+  from{transform:scale(.8);opacity:0;}
+  to{transform:scale(1);opacity:1;}
 }
 
-.fullscreen .group {
-  font-size:48px;
-}
-
-.draw {
-  font-size:40px;
+.draw{
+  font-size:56px;
   text-align:center;
-  padding:20px;
+  margin:20px;
+  animation: flash .8s infinite alternate;
+}
+
+@keyframes flash{
+  from{opacity:.3;}
+  to{opacity:1;}
 }
 </style>
 </head>
 
 <body>
 
-<h1>🎓 課堂分組系統 PRO</h1>
+<h1>🎓 課堂分組系統 PRO+</h1>
 
-<div class="controls">
-<label>學生名單（每行一人）</label>
-<textarea id="students"></textarea>
+<textarea id="students" rows="6" placeholder="學生名單（每行一人）"></textarea>
+<input id="size" type="number" value="3">
 
-<label>不能同組（A,B）</label>
-<textarea id="rules"></textarea>
-
-<label>每組人數</label>
-<input type="number" id="size" value="3" min="2">
-
-<button class="primary" onclick="group()">🎲 隨機分組</button>
-<button class="primary" onclick="drawStudent()">🎯 抽學生</button>
-<button class="primary" onclick="drawGroup()">🎯 抽組別</button>
-<button class="gray" onclick="toggleFull()">🖥️ 投影模式</button>
-</div>
-
-<div id="draw" class="draw"></div>
-<div id="result"></div>
-
-<script>
-let groups=[], drawnStudents=[], drawnGroups=[];
-const studentsEl = document.getElementById('students');
-const rulesEl = document.getElementById('rules');
-
-studentsEl.value = localStorage.students || "";
-rulesEl.value = localStorage.rules || "";
-
-studentsEl.oninput = ()=>localStorage.students = studentsEl.value;
-rulesEl.oninput = ()=>localStorage.rules = rulesEl.value;
-
-function shuffle(a){
-  for(let i=a.length-1;i>0;i--){
-    let j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
-  }
-}
-
-function group(){
-  const students = studentsEl.value.split('\n').filter(x=>x);
-  const rules = rulesEl.value.split('\n').map(r=>r.split(','));
-  const size = +document.getElementById('size').value;
-
-  for(let t=0;t<500;t++){
-    shuffle(students);
-    let g=[];
-    for(let i=0;i<students.length;i+=size){
-      g.push(students.slice(i,i+size));
-    }
-    let ok=true;
-    for(let [a,b] of rules){
-      for(let gg of g){
-        if(gg.includes(a)&&gg.includes(b)) ok=false;
-      }
-    }
-    if(ok){ groups=g; render(); return; }
-  }
-  alert("限制條件無法滿足");
-}
-
-function render(){
-  const r=document.getElementById('result');
-  r.innerHTML='';
-  groups.forEach((g,i)=>{
-    const div=document.createElement('div');
-    div.className='group';
-    div.innerHTML=`第 ${i+1} 組：`;
-    g.forEach(m=>{
-      const s=document.createElement('span');
-      s.className='member';
-      s.textContent=m;
-      s.draggable=true;
-      s.ondragstart=e=>e.dataTransfer.setData('text',m);
-      s.ondrop=e=>{
-        e.preventDefault();
-        swap(m,e.dataTransfer.getData('text'));
-      };
-      s.ondragover=e=>e.preventDefault();
-      div.appendChild(s);
-    });
-    r.appendChild(div);
-  });
-}
-
-function swap(a,b){
-  if(a===b) return;
-  groups.forEach(g=>{
-    if(g.includes(a)) g[g.indexOf(a)]=b;
-    else if(g.includes(b)) g[g.indexOf(b)]=a;
-  });
-  render();
-}
-
-function toggleFull(){
-  document.body.classList.toggle('fullscreen');
-  document.documentElement.requestFullscreen?.();
-}
-
-function drawStudent(){
-  const all = studentsEl.value.split('\n').filter(x=>!drawnStudents.includes(x));
-  if(!all.length){ alert("抽完了"); return; }
-  const s = all[Math.floor(Math.random()*all.length)];
-  drawnStudents.push(s);
-  document.getElementById('draw').textContent = "🎯 抽到：" + s;
-}
-
-function drawGroup(){
-  const all = groups.map((_,i)=>i+1).filter(x=>!drawnGroups.includes(x));
-  if(!all.length){ alert("組別抽完"); return; }
-  const g = all[Math.floor(Math.random()*all.length)];
-  drawnGroups.push(g);
-  document.getElementById('draw').textContent = "🎯 第 " + g + " 組";
-}
-</script>
-
-</body>
-</html>
+<button class="primary" onclick="makeGroup()">🎲 隨機分組</button>
+<button class="primary" onclick="drawOne()">🎯 抽學生</button>
+<button class="gray" onclick="exportCSV()"
