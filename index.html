@@ -5,60 +5,91 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>課堂分組系統 PRO+</title>
 
-<style>
-body {
-  font-family: "Microsoft JhengHei", Arial;
-  background:#eef2f7;
-  padding:20px;
-}
-h1{text-align:center;}
+<script>
+let drawn = [];
+let locking = false;
 
-button{
-  font-size:18px;
-  padding:12px 18px;
-  margin:5px;
-  border:none;
-  border-radius:10px;
-  cursor:pointer;
-}
-.primary{background:#2563eb;color:white;}
-.gray{background:#6b7280;color:white;}
+const beep = new Audio("sounds/beep.mp3");
+const drawSound = new Audio("sounds/draw.mp3");
 
-.group{
-  background:white;
-  margin:12px 0;
-  padding:16px;
-  border-radius:14px;
-  font-size:32px;
-  animation: pop .5s ease;
-  box-shadow:0 4px 10px rgba(0,0,0,.15);
+function vibrate(ms){
+  if (navigator.vibrate) navigator.vibrate(ms);
 }
 
-.member{
-  display:inline-block;
-  padding:8px 14px;
-  margin:6px;
-  background:#e0e7ff;
-  border-radius:12px;
+function getStudents(){
+  return document.getElementById('students')
+    .value.split('\n').map(s=>s.trim()).filter(Boolean);
 }
 
-@keyframes pop{
-  from{transform:scale(.8);opacity:0;}
-  to{transform:scale(1);opacity:1;}
+async function drawOne(){
+  if(locking) return;                     // 防連點
+  const students = getStudents();
+  if(!students.length){
+    alert("❗請先輸入學生名單");
+    return;
+  }
+  if(drawn.length >= students.length){
+    alert("✅ 全部都抽完了");
+    return;
+  }
+
+  locking = true;
+  disableButtons(true);
+
+  const drawDiv = document.getElementById('draw');
+  drawDiv.style.fontSize = "120px";
+  drawDiv.style.textAlign = "center";
+
+  // 3-2-1 倒數
+  for(let i=3;i>=1;i--){
+    drawDiv.textContent = i;
+    beep.currentTime = 0;
+    beep.play();
+    vibrate(80);
+    await sleep(1000);
+  }
+
+  // 抽人（排除已抽）
+  const pool = students.filter(s=>!drawn.includes(s));
+  const result = pool[Math.floor(Math.random()*pool.length)];
+  drawn.push(result);
+
+  drawSound.play();
+  vibrate([200,100,200]);
+
+  drawDiv.style.fontSize = "64px";
+  drawDiv.textContent = "🎯 抽到：" + result;
+
+  showDrawnList();
+  disableButtons(false);
+  locking = false;
 }
 
-.draw{
-  font-size:56px;
-  text-align:center;
-  margin:20px;
-  animation: flash .8s infinite alternate;
+function showDrawnList(){
+  let list = document.getElementById("drawnList");
+  if(!list){
+    list = document.createElement("div");
+    list.id = "drawnList";
+    list.style.marginTop = "20px";
+    document.body.appendChild(list);
+  }
+  list.innerHTML = "📌 已抽： " + drawn.join("、");
 }
 
-@keyframes flash{
-  from{opacity:.3;}
-  to{opacity:1;}
+function disableButtons(disable){
+  document.querySelectorAll("button").forEach(b=>{
+    if(b.textContent.includes("抽")){
+      b.disabled = disable;
+      b.style.opacity = disable ? .5 : 1;
+    }
+  });
 }
-</style>
+
+function sleep(ms){
+  return new Promise(r=>setTimeout(r,ms));
+}
+</script>
+
 </head>
 
 <body>
@@ -70,4 +101,92 @@ button{
 
 <button class="primary" onclick="makeGroup()">🎲 隨機分組</button>
 <button class="primary" onclick="drawOne()">🎯 抽學生</button>
-<button class="gray" onclick="exportCSV()"
+<button class="gray" onclick="exportCSV()">📊 匯出 Excel</button>
+<button class="gray" onclick="exportPDF()">📄 匯出 PDF</button>
+
+<div id="draw"></div>
+<div id="result"></div>
+
+<audio id="drawSound" src="sounds/draw.mp3"></audio>
+<audio id="okSound" src="sounds/success.mp3"></audio>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+<script>
+let groups=[];
+const drawSound=document.getElementById('drawSound');
+const okSound=document.getElementById('okSound');
+
+document.getElementById('students').value =
+  localStorage.students||"";
+
+document.getElementById('students').oninput=e=>
+  localStorage.students=e.target.value;
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+}
+
+function makeGroup(){
+  const students=document.getElementById('students').value
+    .split('\n').filter(x=>x);
+  const size=+document.getElementById('size').value;
+  shuffle(students);
+  groups=[];
+  for(let i=0;i<students.length;i+=size)
+    groups.push(students.slice(i,i+size));
+  okSound.play();
+  render();
+}
+
+function render(){
+  const r=document.getElementById('result');
+  r.innerHTML='';
+  groups.forEach((g,i)=>{
+    const d=document.createElement('div');
+    d.className='group';
+    d.innerHTML=`第 ${i+1} 組：${g.join('、')}`;
+    r.appendChild(d);
+  });
+}
+
+function drawOne(){
+  const students=document.getElementById('students').value
+    .split('\n').filter(x=>x);
+  if(!students.length) return;
+  drawSound.play();
+  const s=students[Math.floor(Math.random()*students.length)];
+  const d=document.getElementById('draw');
+  d.className='draw';
+  d.textContent="🎯 抽到："+s;
+}
+
+function exportCSV(){
+  let csv="組別,學生\n";
+  groups.forEach((g,i)=>{
+    g.forEach(s=>csv+=`第${i+1}組,${s}\n`);
+  });
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download="分組結果.csv";
+  a.click();
+}
+
+function exportPDF(){
+  html2canvas(document.getElementById('result')).then(c=>{
+    const pdf=new jspdf.jsPDF();
+    const w=pdf.internal.pageSize.getWidth();
+    const h=c.height*w/c.width;
+    pdf.addImage(c.toDataURL(),'PNG',0,0,w,h);
+    pdf.save("分組結果.pdf");
+  });
+}
+</script>
+
+</body>
+</html>
