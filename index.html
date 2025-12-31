@@ -150,75 +150,7 @@ function exportCSV() {
   link.href = URL.createObjectURL(blob);
   link.download = "分組結果.csv";
   link.click();<script>
-/* ===== 防呆核心 ===== */
-let isBusy = false;
 
-function safeStudents(){
-  const raw = document.getElementById('students').value
-    .split('\n').map(s=>s.trim()).filter(Boolean);
-  return [...new Set(raw)]; // 去重
-}
-
-function safeGroupSize(){
-  let size = parseInt(document.getElementById('size').value);
-  if(isNaN(size) || size < 2){
-    size = 2;
-    document.getElementById('size').value = 2;
-  }
-  return size;
-}
-
-function lockAll(lock){
-  document.querySelectorAll("button").forEach(b=>{
-    b.disabled = lock;
-    b.style.opacity = lock ? 0.5 : 1;
-  });
-  isBusy = lock;
-}
-
-/* ===== 防呆包裝：抽籤 ===== */
-async function safeDraw(drawFunc){
-  if(isBusy) return;
-
-  const students = safeStudents();
-  if(students.length === 0){
-    alert("❗請先輸入學生名單");
-    return;
-  }
-
-  lockAll(true);
-  try{
-    await drawFunc(students);
-  }finally{
-    lockAll(false);
-  }
-}
-
-/* ===== 防呆包裝：分組 ===== */
-function safeGroup(groupFunc){
-  if(isBusy) return;
-
-  const students = safeStudents();
-  if(students.length < 2){
-    alert("❗至少需要 2 位學生");
-    return;
-  }
-
-  lockAll(true);
-  try{
-    groupFunc(students, safeGroupSize());
-  }finally{
-    lockAll(false);
-  }
-}
-
-/* ===== 防呆包裝：匯出 ===== */
-function safeExport(exportFunc){
-  if(!window.groups || window.groups.length === 0){
-    alert("❗尚未完成分組，無法匯出");
-    return;
-  }
-  exportFunc();
 }
 </script>
 
