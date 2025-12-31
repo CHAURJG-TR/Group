@@ -3,157 +3,157 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>學生隨機分組系統</title>
+<title>課堂分組系統 PRO+</title>
 
 <style>
 body {
   font-family: "Microsoft JhengHei", Arial;
-  background: #f2f5f9;
-  padding: 20px;
+  background:#eef2f7;
+  padding:20px;
 }
-h1 { text-align: center; }
-textarea, input {
-  width: 100%;
-  padding: 12px;
-  font-size: 18px;
-  margin: 6px 0;
+h1{text-align:center;}
+
+button{
+  font-size:18px;
+  padding:12px 18px;
+  margin:5px;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
 }
-button {
-  padding: 14px 20px;
-  font-size: 18px;
-  margin: 5px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
+.primary{background:#2563eb;color:white;}
+.gray{background:#6b7280;color:white;}
+
+.group{
+  background:white;
+  margin:12px 0;
+  padding:16px;
+  border-radius:14px;
+  font-size:32px;
+  animation: pop .5s ease;
+  box-shadow:0 4px 10px rgba(0,0,0,.15);
 }
-button:hover { opacity: 0.9; }
-.btn {
-  background: #2563eb;
-  color: white;
+
+.member{
+  display:inline-block;
+  padding:8px 14px;
+  margin:6px;
+  background:#e0e7ff;
+  border-radius:12px;
 }
-.group {
-  background: white;
-  padding: 15px;
-  margin: 10px 0;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  font-size: 20px;
+
+@keyframes pop{
+  from{transform:scale(.8);opacity:0;}
+  to{transform:scale(1);opacity:1;}
+}
+
+.draw{
+  font-size:56px;
+  text-align:center;
+  margin:20px;
+  animation: flash .8s infinite alternate;
+}
+
+@keyframes flash{
+  from{opacity:.3;}
+  to{opacity:1;}
 }
 </style>
 </head>
 
 <body>
 
-<h1>🎒 學生隨機分組系統</h1>
+<h1>🎓 課堂分組系統 PRO+</h1>
 
-<label>學生名單（每行一人）</label>
-<textarea id="students" rows="8" placeholder="王小明
-李小華
-陳同學"></textarea>
+<textarea id="students" rows="6" placeholder="學生名單（每行一人）"></textarea>
+<input id="size" type="number" value="3">
 
-<label>不能同組學生（每行一組，用逗號）</label>
-<textarea id="restrictions" rows="4" placeholder="王小明,李小華"></textarea>
+<button class="primary" onclick="makeGroup()">🎲 隨機分組</button>
+<button class="primary" onclick="drawOne()">🎯 抽學生</button>
+<button class="gray" onclick="exportCSV()">📊 匯出 Excel</button>
+<button class="gray" onclick="exportPDF()">📄 匯出 PDF</button>
 
-<label>每組人數</label>
-<input type="number" id="groupSize" value="3" min="2">
-
-<button onclick="safeGroup(makeGroup)">🎲 隨機分組</button>
-<button onclick="safeExport(exportPDF)">📄 匯出 PDF</button>
-<button onclick="safeExport(exportCSV)">📊 匯出 Excel</button>
-
-<h2>📌 分組結果</h2>
+<div id="draw"></div>
 <div id="result"></div>
+
+<audio id="drawSound" src="sounds/draw.mp3"></audio>
+<audio id="okSound" src="sounds/success.mp3"></audio>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
 <script>
-let currentGroups = [];
+let groups=[];
+const drawSound=document.getElementById('drawSound');
+const okSound=document.getElementById('okSound');
 
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+document.getElementById('students').value =
+  localStorage.students||"";
+
+document.getElementById('students').oninput=e=>
+  localStorage.students=e.target.value;
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
   }
 }
 
-function generateGroups() {
-  const students = document.getElementById('students').value
-    .split('\n').map(s => s.trim()).filter(Boolean);
-
-  const rules = document.getElementById('restrictions').value
-    .split('\n').map(r => r.split(',').map(s => s.trim()));
-
-  const size = parseInt(document.getElementById('groupSize').value);
-  let attempts = 0;
-
-  while (attempts < 1000) {
-    let temp = [...students];
-    shuffle(temp);
-    let groups = [];
-
-    for (let i = 0; i < temp.length; i += size) {
-      groups.push(temp.slice(i, i + size));
-    }
-
-    let ok = true;
-    for (let [a, b] of rules) {
-      for (let g of groups) {
-        if (g.includes(a) && g.includes(b)) ok = false;
-      }
-    }
-
-    if (ok) {
-      currentGroups = groups;
-      render(groups);
-      return;
-    }
-    attempts++;
-  }
-  alert("⚠️ 無法符合限制條件，請調整名單或限制");
+function makeGroup(){
+  const students=document.getElementById('students').value
+    .split('\n').filter(x=>x);
+  const size=+document.getElementById('size').value;
+  shuffle(students);
+  groups=[];
+  for(let i=0;i<students.length;i+=size)
+    groups.push(students.slice(i,i+size));
+  okSound.play();
+  render();
 }
 
-function render(groups) {
-  const result = document.getElementById('result');
-  result.innerHTML = '';
-  groups.forEach((g, i) => {
-    const div = document.createElement('div');
-    div.className = 'group';
-    div.innerHTML = `<b>第 ${i+1} 組：</b> ${g.join('、')}`;
-    result.appendChild(div);
+function render(){
+  const r=document.getElementById('result');
+  r.innerHTML='';
+  groups.forEach((g,i)=>{
+    const d=document.createElement('div');
+    d.className='group';
+    d.innerHTML=`第 ${i+1} 組：${g.join('、')}`;
+    r.appendChild(d);
   });
 }
 
-function exportPDF() {
-  html2canvas(document.getElementById('result')).then(canvas => {
-    const img = canvas.toDataURL('image/png');
-    const pdf = new jspdf.jsPDF();
-    const w = pdf.internal.pageSize.getWidth();
-    const h = canvas.height * w / canvas.width;
-    pdf.addImage(img, 'PNG', 0, 0, w, h);
-    pdf.save('分組結果.pdf');
-  });
+function drawOne(){
+  const students=document.getElementById('students').value
+    .split('\n').filter(x=>x);
+  if(!students.length) return;
+  drawSound.play();
+  const s=students[Math.floor(Math.random()*students.length)];
+  const d=document.getElementById('draw');
+  d.className='draw';
+  d.textContent="🎯 抽到："+s;
 }
 
-function exportCSV() {
-  if (!currentGroups.length) return alert("請先分組");
-
-  let csv = "組別,學生\n";
-  currentGroups.forEach((g, i) => {
-    g.forEach(name => {
-      csv += `第${i+1}組,${name}\n`;
-    });
+function exportCSV(){
+  let csv="組別,學生\n";
+  groups.forEach((g,i)=>{
+    g.forEach(s=>csv+=`第${i+1}組,${s}\n`);
   });
-
-  const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "分組結果.csv";
-  link.click();<script>
-
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download="分組結果.csv";
+  a.click();
 }
-</script>
 
+function exportPDF(){
+  html2canvas(document.getElementById('result')).then(c=>{
+    const pdf=new jspdf.jsPDF();
+    const w=pdf.internal.pageSize.getWidth();
+    const h=c.height*w/c.width;
+    pdf.addImage(c.toDataURL(),'PNG',0,0,w,h);
+    pdf.save("分組結果.pdf");
+  });
 }
 </script>
 
