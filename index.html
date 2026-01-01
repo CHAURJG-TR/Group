@@ -3,79 +3,46 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>課堂分組系統 PRO+</title>
+<title>課堂分組系統｜防呆完整版</title>
 
 <style>
-body {
-  font-family: "Microsoft JhengHei", Arial;
-  background:#eef2f7;
-  padding:20px;
-}
-h1{text-align:center;}
-
-button{
-  font-size:18px;
-  padding:12px 18px;
-  margin:5px;
-  border:none;
-  border-radius:10px;
-  cursor:pointer;
-}
-.primary{background:#2563eb;color:white;}
-.gray{background:#6b7280;color:white;}
-
-.group{
-  background:white;
-  margin:12px 0;
-  padding:16px;
-  border-radius:14px;
-  font-size:32px;
-  animation: pop .5s ease;
-  box-shadow:0 4px 10px rgba(0,0,0,.15);
-}
-
-.member{
-  display:inline-block;
-  padding:8px 14px;
-  margin:6px;
-  background:#e0e7ff;
-  border-radius:12px;
-}
-
-@keyframes pop{
-  from{transform:scale(.8);opacity:0;}
-  to{transform:scale(1);opacity:1;}
-}
-
-.draw{
-  font-size:56px;
-  text-align:center;
-  margin:20px;
-  animation: flash .8s infinite alternate;
-}
-
-@keyframes flash{
-  from{opacity:.3;}
-  to{opacity:1;}
-}
+body{font-family:"Microsoft JhengHei",Arial;background:#eef2f7;padding:20px}
+h1{text-align:center}
+textarea,input{width:100%;font-size:18px;padding:10px;margin:6px 0}
+button{font-size:18px;padding:12px 18px;margin:5px;border:none;border-radius:10px;cursor:pointer}
+.primary{background:#2563eb;color:#fff}
+.gray{background:#6b7280;color:#fff}
+.warn{background:#dc2626;color:#fff}
+.group{background:#fff;margin:12px 0;padding:16px;border-radius:14px;
+font-size:28px;box-shadow:0 4px 10px rgba(0,0,0,.15);animation:pop .4s}
+.member{display:inline-block;padding:6px 14px;margin:6px;background:#e0e7ff;
+border-radius:10px;cursor:grab}
+.draw{font-size:120px;text-align:center;margin:20px}
+.fullscreen textarea,.fullscreen input,.fullscreen .controls{display:none}
+.fullscreen .group{font-size:48px}
+@keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
 </style>
 </head>
 
 <body>
 
-<h1>🎓 課堂分組系統 PRO+</h1>
+<h1>🎓 課堂分組系統（防呆完整版）</h1>
 
+<div class="controls">
 <textarea id="students" rows="6" placeholder="學生名單（每行一人）"></textarea>
-<input id="size" type="number" value="3">
+<input id="size" type="number" value="3" min="2">
+<button class="primary" onclick="safeGroup(makeGroup)">🎲 隨機分組</button>
+<button class="primary" onclick="safeDraw(drawStudent)">🎯 抽學生</button>
+<button class="gray" onclick="toggleFull()">🖥️ 投影模式</button>
+<button class="gray" onclick="safeExport(exportPDF)">📄 PDF</button>
+<button class="gray" onclick="safeExport(exportCSV)">📊 Excel</button>
+<button class="warn" onclick="resetAll()">🔄 重置</button>
+</div>
 
-<button class="primary" onclick="makeGroup()">🎲 隨機分組</button>
-<button class="primary" onclick="drawOne()">🎯 抽學生</button>
-<button class="gray" onclick="exportCSV()">📊 匯出 Excel</button>
-<button class="gray" onclick="exportPDF()">📄 匯出 PDF</button>
-
-<div id="draw"></div>
+<div id="draw" class="draw"></div>
 <div id="result"></div>
 
+<audio id="beep" src="sounds/beep.mp3"></audio>
 <audio id="drawSound" src="sounds/draw.mp3"></audio>
 <audio id="okSound" src="sounds/success.mp3"></audio>
 
@@ -83,77 +50,113 @@ button{
 <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
 <script>
-let groups=[];
-const drawSound=document.getElementById('drawSound');
-const okSound=document.getElementById('okSound');
+let groups=[], drawn=[], busy=false;
+const studentsEl=document.getElementById("students");
+studentsEl.value=localStorage.students||"";
+studentsEl.oninput=()=>localStorage.students=studentsEl.value;
 
-document.getElementById('students').value =
-  localStorage.students||"";
+function vibrate(ms){navigator.vibrate&&navigator.vibrate(ms);}
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}}
 
-document.getElementById('students').oninput=e=>
-  localStorage.students=e.target.value;
-
-function shuffle(a){
-  for(let i=a.length-1;i>0;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
-  }
+function cleanStudents(){
+  return [...new Set(studentsEl.value.split('\n').map(s=>s.trim()).filter(Boolean))];
 }
 
-function makeGroup(){
-  const students=document.getElementById('students').value
-    .split('\n').filter(x=>x);
-  const size=+document.getElementById('size').value;
-  shuffle(students);
-  groups=[];
-  for(let i=0;i<students.length;i+=size)
-    groups.push(students.slice(i,i+size));
-  okSound.play();
+function lock(v){
+  busy=v;
+  document.querySelectorAll("button").forEach(b=>{b.disabled=v;b.style.opacity=v?.5:1});
+}
+
+function safeGroup(fn){
+  if(busy) return;
+  const s=cleanStudents();
+  if(s.length<2) return alert("至少 2 位學生");
+  lock(true); fn(s,Math.max(2,+size.value||2)); lock(false);
+}
+
+function makeGroup(students,size){
+  shuffle(students); groups=[];
+  for(let i=0;i<students.length;i+=size) groups.push(students.slice(i,i+size));
+  document.getElementById("okSound").play();
   render();
 }
 
 function render(){
-  const r=document.getElementById('result');
-  r.innerHTML='';
+  const r=document.getElementById("result"); r.innerHTML="";
   groups.forEach((g,i)=>{
-    const d=document.createElement('div');
-    d.className='group';
-    d.innerHTML=`第 ${i+1} 組：${g.join('、')}`;
+    const d=document.createElement("div"); d.className="group";
+    d.innerHTML=`第 ${i+1} 組：`;
+    g.forEach(m=>{
+      const s=document.createElement("span");
+      s.className="member"; s.textContent=m; s.draggable=true;
+      s.ondragstart=e=>e.dataTransfer.setData("t",m);
+      s.ondragover=e=>e.preventDefault();
+      s.ondrop=e=>{swap(m,e.dataTransfer.getData("t"))};
+      d.appendChild(s);
+    });
     r.appendChild(d);
   });
 }
 
-function drawOne(){
-  const students=document.getElementById('students').value
-    .split('\n').filter(x=>x);
-  if(!students.length) return;
-  drawSound.play();
-  const s=students[Math.floor(Math.random()*students.length)];
-  const d=document.getElementById('draw');
-  d.className='draw';
-  d.textContent="🎯 抽到："+s;
+function swap(a,b){
+  if(a===b) return;
+  groups.forEach(g=>{
+    if(g.includes(a)) g[g.indexOf(a)]=b;
+    else if(g.includes(b)) g[g.indexOf(b)]=a;
+  });
+  render();
+}
+
+async function safeDraw(fn){
+  if(busy) return;
+  const s=cleanStudents().filter(x=>!drawn.includes(x));
+  if(!s.length) return alert("已全部抽完");
+  lock(true); await fn(s); lock(false);
+}
+
+async function drawStudent(pool){
+  const d=document.getElementById("draw");
+  for(let i=3;i>0;i--){
+    d.textContent=i; beep.play(); vibrate(80);
+    await new Promise(r=>setTimeout(r,1000));
+  }
+  const r=pool[Math.random()*pool.length|0];
+  drawn.push(r);
+  drawSound.play(); vibrate([200,100,200]);
+  d.textContent="🎯 "+r;
+}
+
+function toggleFull(){
+  document.body.classList.toggle("fullscreen");
+  document.documentElement.requestFullscreen?.();
+}
+
+function safeExport(fn){
+  if(!groups.length) return alert("尚未分組");
+  fn();
 }
 
 function exportCSV(){
   let csv="組別,學生\n";
-  groups.forEach((g,i)=>{
-    g.forEach(s=>csv+=`第${i+1}組,${s}\n`);
-  });
-  const blob=new Blob(["\ufeff"+csv],{type:'text/csv'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download="分組結果.csv";
-  a.click();
+  groups.forEach((g,i)=>g.forEach(s=>csv+=`第${i+1}組,${s}\n`));
+  const b=new Blob(["\ufeff"+csv],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(b); a.download="分組結果.csv"; a.click();
 }
 
 function exportPDF(){
-  html2canvas(document.getElementById('result')).then(c=>{
+  html2canvas(result).then(c=>{
     const pdf=new jspdf.jsPDF();
     const w=pdf.internal.pageSize.getWidth();
-    const h=c.height*w/c.width;
-    pdf.addImage(c.toDataURL(),'PNG',0,0,w,h);
+    pdf.addImage(c.toDataURL(),"PNG",0,0,w,c.height*w/c.width);
     pdf.save("分組結果.pdf");
   });
+}
+
+function resetAll(){
+  if(!confirm("確定重置？")) return;
+  groups=[]; drawn=[];
+  result.innerHTML=""; draw.textContent="";
 }
 </script>
 
