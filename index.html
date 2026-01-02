@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>分組座位系統（講台版）</title>
+<title>分組座位系統</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body{font-family:"Microsoft JhengHei",Arial;background:#f1f5f9;padding:20px;}
@@ -16,19 +16,19 @@ button:disabled{opacity:.5;}
 .face{display:grid;grid-template-columns:1fr 1fr;gap:18px 40px;justify-items:center;margin-bottom:10px;}
 .seat,.back{background:#fff;width:110px;height:60px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;}
 .back{background:#fde68a;margin:10px auto 0;}
-#podium{background:#f87171;color:#fff;font-weight:bold;text-align:center;padding:8px;border-radius:12px;margin-bottom:12px;}
+#podium{background:#f87171;color:#fff;font-weight:bold;text-align:center;padding:8px;border-radius:12px;margin-bottom:12px;width:100px;margin-left:auto;margin-right:auto;}
 .fullscreen textarea,.fullscreen button{display:none;}
 .fullscreen .seat,.fullscreen .back{font-size:32px;height:100px;}
 </style>
 </head>
 <body>
 
-<h1>分組座位系統（講台版）</h1>
+<h1>分組座位系統（講台版 PDF）</h1>
 
+<!-- 講台在前面 -->
 <div id="podium">講台</div>
 
-<textarea id="male" rows="6" placeholder="男生名單（10 人，每行一人）"></textarea>
-<textarea id="female" rows="6" placeholder="女生名單（10 人，每行一人）"></textarea>
+<textarea id="students" rows="10" placeholder="學生名單（20 人，每行一人）"></textarea>
 <textarea id="ban" rows="3" placeholder="不能同一組，每行一條，用 , 分隔"></textarea>
 
 <button onclick="makeGroups()">生成分組</button>
@@ -41,8 +41,7 @@ button:disabled{opacity:.5;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-const maleEl = document.getElementById("male");
-const femaleEl = document.getElementById("female");
+const studentsEl = document.getElementById("students");
 const banEl = document.getElementById("ban");
 let groupsData=[];
 
@@ -53,20 +52,17 @@ function parseBans(){return banEl.value.split('\n').map(l=>l.split(',').map(s=>s
 function validGroup(g,bans){return !bans.some(r=>r.every(n=>g.includes(n)));}
 
 function makeGroups(){
-  const male=parseLines(maleEl);
-  const female=parseLines(femaleEl);
-  if(male.length!==10 || female.length!==10){alert("⚠️ 男生/女生各需 10 人"); return;}
+  let students=parseLines(studentsEl);
+  if(students.length!==20){alert("⚠️ 名單需 20 人"); return;}
   const bans=parseBans();
   
   let attempt=0, success=false;
   while(attempt<800 && !success){
     attempt++;
-    shuffle(male); shuffle(female);
-    let tempMale=[...male], tempFemale=[...female], res=[];
-    let ok=true;
-
+    shuffle(students);
+    let temp=[...students], res=[], ok=true;
     for(let i=0;i<4;i++){
-      let g=i<2 ? tempMale.splice(0,5) : tempFemale.splice(0,5);
+      let g=temp.splice(0,5);
       if(!validGroup(g,bans)){ok=false;break;}
       res.push(g);
     }
@@ -104,9 +100,29 @@ function drop(e,g,i){if(!dragInfo||dragInfo.g!==g) return;[groupsData[g][dragInf
 // 全螢幕投影
 function toggleFull(){document.body.classList.toggle("fullscreen");document.documentElement.requestFullscreen?.();}
 
-// PDF 匯出
+// PDF 匯出（講台在前）
 function exportPDF(){
-  html2canvas(document.getElementById("groups")).then(canvas=>{
+  const container = document.createElement("div");
+  container.style.padding="10px";
+  container.style.width="800px";
+  // 講台在 PDF 最上方
+  const podium = document.createElement("div");
+  podium.textContent="講台";
+  podium.style.background="#f87171";
+  podium.style.color="#fff";
+  podium.style.fontWeight="bold";
+  podium.style.textAlign="center";
+  podium.style.padding="8px";
+  podium.style.borderRadius="12px";
+  podium.style.marginBottom="12px";
+  podium.style.width="100%";
+  container.appendChild(podium);
+  // 複製 groups
+  const groupsClone=document.getElementById("groups").cloneNode(true);
+  container.appendChild(groupsClone);
+
+  document.body.appendChild(container);
+  html2canvas(container).then(canvas=>{
     const { jsPDF } = window.jspdf;
     const pdf=new jsPDF("p","mm","a4");
     const img=canvas.toDataURL("image/png");
@@ -114,10 +130,10 @@ function exportPDF(){
     const h=canvas.height*w/canvas.width;
     pdf.addImage(img,"PNG",10,10,w,h);
     pdf.save("分組座位表.pdf");
+    document.body.removeChild(container);
   });
 }
 </script>
 
 </body>
 </html>
-
