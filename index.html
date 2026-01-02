@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -25,7 +25,6 @@ button:disabled{opacity:.5;}
 
 <h1>分組座位系統（男女分組＋講台）</h1>
 
-<!-- 講台在前面 -->
 <div id="podium">講台</div>
 
 <textarea id="male" rows="6" placeholder="男生名單（10 人，每行一人）"></textarea>
@@ -34,6 +33,7 @@ button:disabled{opacity:.5;}
 
 <button onclick="makeGroups()">生成分組</button>
 <button onclick="toggleFull()">🖥️ 投影模式</button>
+<button onclick="switchColumn()">📊 直排模式</button>
 <button onclick="exportPDF()">🖨️ 匯出 PDF</button>
 <button onclick="resetAll()">🔄 重設</button>
 
@@ -47,6 +47,7 @@ const maleEl = document.getElementById("male");
 const femaleEl = document.getElementById("female");
 const banEl = document.getElementById("ban");
 let groupsData=[];
+let columnMode=false; // 直排模式開關
 
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
 
@@ -54,6 +55,7 @@ function parseLines(el){return el.value.split('\n').map(s=>s.trim()).filter(Bool
 function parseBans(){return banEl.value.split('\n').map(l=>l.split(',').map(s=>s.trim()).filter(Boolean)).filter(r=>r.length>=2);}
 function validGroup(g,bans){return !bans.some(r=>r.every(n=>g.includes(n)));}
 
+// 生成分組
 function makeGroups(){
   const male=parseLines(maleEl);
   const female=parseLines(femaleEl);
@@ -66,7 +68,6 @@ function makeGroups(){
     shuffle(male); shuffle(female);
     let tempMale=[...male], tempFemale=[...female], res=[];
     let ok=true;
-
     for(let i=0;i<4;i++){
       let g=i<2 ? tempMale.splice(0,5) : tempFemale.splice(0,5);
       if(!validGroup(g,bans)){ok=false;break;}
@@ -78,24 +79,56 @@ function makeGroups(){
   render();
 }
 
+// 渲染座位
 function render(){
   const box=document.getElementById("groups");
   box.innerHTML="";
-  groupsData.forEach((g,i)=>{
-    const div=document.createElement("div");
-    div.className="group";
-    div.innerHTML=`
-      <h2>第 ${i+1} 組</h2>
-      <div class="face">
-        <div class="seat" draggable="true" ondragstart="drag(event,${i},0)" ondragover="event.preventDefault()" ondrop="drop(event,${i},0)">${g[0]}</div>
-        <div class="seat" draggable="true" ondragstart="drag(event,${i},1)" ondragover="event.preventDefault()" ondrop="drop(event,${i},1)">${g[1]}</div>
-        <div class="seat" draggable="true" ondragstart="drag(event,${i},2)" ondragover="event.preventDefault()" ondrop="drop(event,${i},2)">${g[2]}</div>
-        <div class="seat" draggable="true" ondragstart="drag(event,${i},3)" ondragover="event.preventDefault()" ondrop="drop(event,${i},3)">${g[3]}</div>
-      </div>
-      <div class="back">${g[4]}</div>
-    `;
-    box.appendChild(div);
-  });
+  if(columnMode){
+    // 直排模式 4 排 × 5 人
+    const allStudents = groupsData.flat();
+    for(let r=0;r<4;r++){
+      const rowDiv=document.createElement("div");
+      rowDiv.className="group";
+      rowDiv.innerHTML=`<h2>第 ${r+1} 排</h2>`;
+      const faceDiv=document.createElement("div");
+      faceDiv.className="face";
+      faceDiv.style.gridTemplateColumns="repeat(5,1fr)";
+      for(let c=0;c<5;c++){
+        const idx=r*5+c;
+        if(allStudents[idx]){
+          const seat=document.createElement("div");
+          seat.className="seat";
+          seat.textContent=allStudents[idx];
+          const gIndex = Math.floor(idx/5);
+          const sIndex = idx%5;
+          seat.setAttribute("draggable","true");
+          seat.setAttribute("ondragstart",`drag(event,${gIndex},${sIndex})`);
+          seat.setAttribute("ondragover","event.preventDefault()");
+          seat.setAttribute("ondrop",`drop(event,${gIndex},${sIndex})`);
+          faceDiv.appendChild(seat);
+        }
+      }
+      rowDiv.appendChild(faceDiv);
+      box.appendChild(rowDiv);
+    }
+  } else {
+    // 教室模式
+    groupsData.forEach((g,i)=>{
+      const div=document.createElement("div");
+      div.className="group";
+      div.innerHTML=`
+        <h2>第 ${i+1} 組</h2>
+        <div class="face">
+          <div class="seat" draggable="true" ondragstart="drag(event,${i},0)" ondragover="event.preventDefault()" ondrop="drop(event,${i},0)">${g[0]}</div>
+          <div class="seat" draggable="true" ondragstart="drag(event,${i},1)" ondragover="event.preventDefault()" ondrop="drop(event,${i},1)">${g[1]}</div>
+          <div class="seat" draggable="true" ondragstart="drag(event,${i},2)" ondragover="event.preventDefault()" ondrop="drop(event,${i},2)">${g[2]}</div>
+          <div class="seat" draggable="true" ondragstart="drag(event,${i},3)" ondragover="event.preventDefault()" ondrop="drop(event,${i},3)">${g[3]}</div>
+        </div>
+        <div class="back">${g[4]}</div>
+      `;
+      box.appendChild(div);
+    });
+  }
 }
 
 // 組內拖拉
@@ -103,16 +136,30 @@ let dragInfo=null;
 function drag(e,g,i){dragInfo={g,i};}
 function drop(e,g,i){if(!dragInfo||dragInfo.g!==g) return;[groupsData[g][dragInfo.i],groupsData[g][i]]=[groupsData[g][i],groupsData[g][dragInfo.i]];render();}
 
-// 全螢幕投影
-function toggleFull(){document.body.classList.toggle("fullscreen");document.documentElement.requestFullscreen?.();}
+// 投影模式（可開/離開）
+function toggleFull(){
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen?.();
+    document.body.classList.add("fullscreen");
+  } else {
+    document.exitFullscreen?.();
+    document.body.classList.remove("fullscreen");
+  }
+}
 
-// PDF 匯出（講台在前）
+// 直排模式切換
+function switchColumn(){
+  columnMode=!columnMode;
+  render();
+}
+
+// PDF 匯出
 function exportPDF(){
-  const container = document.createElement("div");
+  const container=document.createElement("div");
   container.style.padding="10px";
   container.style.width="800px";
-  // 講台在 PDF 最上方
-  const podium = document.createElement("div");
+
+  const podium=document.createElement("div");
   podium.textContent="講台";
   podium.style.background="#f87171";
   podium.style.color="#fff";
@@ -123,7 +170,7 @@ function exportPDF(){
   podium.style.marginBottom="12px";
   podium.style.width="100%";
   container.appendChild(podium);
-  // 複製 groups
+
   const groupsClone=document.getElementById("groups").cloneNode(true);
   container.appendChild(groupsClone);
 
@@ -140,7 +187,7 @@ function exportPDF(){
   });
 }
 
-// 🔄 重設功能 + 自動滾回名單
+// 重設 + 滾回名單
 function resetAll(){
   if(confirm("確定要重設所有資料嗎？")) {
     maleEl.value="";
@@ -148,7 +195,7 @@ function resetAll(){
     banEl.value="";
     document.getElementById("groups").innerHTML="";
     groupsData=[];
-    // 自動滾動到男生名單區
+    columnMode=false;
     maleEl.scrollIntoView({behavior:"smooth"});
     maleEl.focus();
   }
