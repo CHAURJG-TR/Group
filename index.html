@@ -2,38 +2,36 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>分組座位系統（男女分組＋講台）</title>
+<title>分組座位系統（完整版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body{font-family:"Microsoft JhengHei",Arial;background:#f1f5f9;padding:20px;}
-h1{text-align:center;margin-bottom:10px;}
-textarea,button{width:100%;font-size:18px;padding:12px;margin:6px 0;}
-button{border:none;border-radius:12px;background:#2563eb;color:#fff;cursor:pointer;}
-button:disabled{opacity:.5;}
-#groups{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:20px;}
-.group{background:#e5e7eb;padding:14px;border-radius:16px;box-shadow:0 4px 10px rgba(0,0,0,.15);}
-.group h2{text-align:center;margin-bottom:8px;}
-.face{display:grid;grid-template-columns:1fr 1fr;gap:18px 40px;justify-items:center;margin-bottom:10px;}
-.seat,.back{background:#fff;width:110px;height:60px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;}
-.back{background:#fde68a;margin:10px auto 0;}
-#podium{background:#f87171;color:#fff;font-weight:bold;text-align:center;padding:8px;border-radius:12px;margin-bottom:12px;width:100px;margin-left:auto;margin-right:auto;}
-.fullscreen textarea,.fullscreen button{display:none;}
-.fullscreen .seat,.fullscreen .back{font-size:32px;height:100px;}
+body{font-family:"Microsoft JhengHei",Arial;background:#f1f5f9;padding:20px}
+h1{text-align:center}
+textarea,button{width:100%;font-size:18px;padding:12px;margin:6px 0}
+button{border:none;border-radius:12px;background:#2563eb;color:#fff;cursor:pointer}
+#groups{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:20px}
+.group{background:#e5e7eb;padding:14px;border-radius:16px}
+.group h2{text-align:center}
+.face{display:grid;grid-template-columns:1fr 1fr;gap:20px 40px;justify-items:center}
+.seat,.back{background:#fff;width:120px;height:60px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.back{background:#fde68a;margin:10px auto}
+#podium{background:#f87171;color:#fff;font-weight:bold;text-align:center;padding:10px;border-radius:12px;width:120px;margin:0 auto 12px}
+.fullscreen textarea,.fullscreen button{display:none}
+.fullscreen .seat,.fullscreen .back{font-size:32px;height:100px}
 </style>
 </head>
 <body>
 
-<h1>分組座位系統（男女分組＋講台）</h1>
-
+<h1>分組座位系統</h1>
 <div id="podium">講台</div>
 
-<textarea id="male" rows="6" placeholder="男生名單（10 人，每行一人）"></textarea>
-<textarea id="female" rows="6" placeholder="女生名單（10 人，每行一人）"></textarea>
-<textarea id="ban" rows="3" placeholder="不能同一組，每行一條，用 , 分隔"></textarea>
+<textarea id="male" placeholder="男生名單（10 人，每行一人）"></textarea>
+<textarea id="female" placeholder="女生名單（10 人，每行一人）"></textarea>
+<textarea id="ban" placeholder="不能同組（多人可，一行一條，用 , 分隔）"></textarea>
 
-<button id="generateBtn" onclick="makeGroups()">生成小組</button>
+<button id="genBtn" onclick="makeGroups()">生成小組</button>
+<button onclick="switchMode()">📊 直排模式</button>
 <button onclick="toggleFull()">🖥️ 投影模式</button>
-<button onclick="switchColumn()">📊 直排模式</button>
 <button onclick="exportPDF()">🖨️ 匯出 PDF</button>
 <button onclick="resetAll()">🔄 重設</button>
 
@@ -43,176 +41,98 @@ button:disabled{opacity:.5;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-const maleEl = document.getElementById("male");
-const femaleEl = document.getElementById("female");
-const banEl = document.getElementById("ban");
-let groupsData=[];
-let columnMode=false; // 直排模式開關
+let groupsData=[], columnMode=false, dragInfo=null
 
-function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+const parse = el => el.value.split("\n").map(s=>s.trim()).filter(Boolean)
+const parseBans = () => parse(document.getElementById("ban")).map(l=>l.split(",").map(s=>s.trim()))
+const shuffle = a => {for(let i=a.length-1;i>0;i--){let j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}}
 
-function parseLines(el){return el.value.split('\n').map(s=>s.trim()).filter(Boolean);}
-function parseBans(){return banEl.value.split('\n').map(l=>l.split(',').map(s=>s.trim()).filter(Boolean)).filter(r=>r.length>=2);}
-function validGroup(g,bans){return !bans.some(r=>r.every(n=>g.includes(n)));}
+function impossibleRule(bans, groups){
+  for(const r of bans) if(r.length > groups) return r
+  return null
+}
 
-// 生成分組
+function validGroup(g,bans){return !bans.some(r=>r.every(n=>g.includes(n)))}
+
 function makeGroups(){
-  const male=parseLines(maleEl);
-  const female=parseLines(femaleEl);
-  if(male.length!==10 || female.length!==10){alert("⚠️ 男生/女生各需 10 人"); return;}
-  const bans=parseBans();
-  
-  let attempt=0, success=false;
-  while(attempt<800 && !success){
-    attempt++;
-    shuffle(male); shuffle(female);
-    let tempMale=[...male], tempFemale=[...female], res=[];
-    let ok=true;
+  const male=parse(male), female=parse(female), bans=parseBans()
+  if(male.length!==10||female.length!==10){alert("男生、女生各需 10 人");return}
+
+  const bad = impossibleRule(bans,4)
+  if(bad){alert("❌ 規則不可能成立\n\n"+bad.join("、"));return}
+
+  for(let t=0;t<800;t++){
+    shuffle(male); shuffle(female)
+    let res=[], ok=true
     for(let i=0;i<4;i++){
-      let g=i<2 ? tempMale.splice(0,5) : tempFemale.splice(0,5);
-      if(!validGroup(g,bans)){ok=false;break;}
-      res.push(g);
+      let g=i<2?male.splice(0,5):female.splice(0,5)
+      if(!validGroup(g,bans)){ok=false;break}
+      res.push(g)
     }
-    if(ok){groupsData=res;success=true;break;}
+    if(ok){groupsData=res;render();return}
   }
-  if(!success){alert("❌ 規則衝突，無法完成分組"); return;}
-
-  // 生成後保持當前模式，更新生成按鈕文字
-  const genBtn = document.getElementById("generateBtn");
-  genBtn.textContent = columnMode ? "生成直排" : "生成小組";
-
-  render();
+  alert("❌ 規則衝突，無法完成分組")
 }
 
-// 渲染座位
 function render(){
-  const box=document.getElementById("groups");
-  box.innerHTML="";
+  const box=document.getElementById("groups")
+  box.innerHTML=""
   if(columnMode){
-    const allStudents = groupsData.flat();
+    let all=groupsData.flat()
     for(let r=0;r<4;r++){
-      const rowDiv=document.createElement("div");
-      rowDiv.className="group";
-      rowDiv.innerHTML=`<h2>第 ${r+1} 排</h2>`;
-      const faceDiv=document.createElement("div");
-      faceDiv.className="face";
-      faceDiv.style.gridTemplateColumns="repeat(5,1fr)";
+      let d=document.createElement("div")
+      d.className="group"
+      d.innerHTML=`<h2>第 ${r+1} 排</h2>`
+      let f=document.createElement("div")
+      f.className="face"
+      f.style.gridTemplateColumns="repeat(5,1fr)"
       for(let c=0;c<5;c++){
-        const idx=r*5+c;
-        if(allStudents[idx]){
-          const seat=document.createElement("div");
-          seat.className="seat";
-          seat.textContent=allStudents[idx];
-          const gIndex = Math.floor(idx/5);
-          const sIndex = idx%5;
-          seat.setAttribute("draggable","true");
-          seat.setAttribute("ondragstart",`drag(event,${gIndex},${sIndex})`);
-          seat.setAttribute("ondragover","event.preventDefault()");
-          seat.setAttribute("ondrop",`drop(event,${gIndex},${sIndex})`);
-          faceDiv.appendChild(seat);
-        }
+        let s=document.createElement("div")
+        s.className="seat"
+        s.textContent=all[r*5+c]||""
+        f.appendChild(s)
       }
-      rowDiv.appendChild(faceDiv);
-      box.appendChild(rowDiv);
+      d.appendChild(f); box.appendChild(d)
     }
-  } else {
+  }else{
     groupsData.forEach((g,i)=>{
-      const div=document.createElement("div");
-      div.className="group";
-      div.innerHTML=`
-        <h2>第 ${i+1} 組</h2>
-        <div class="face">
-          <div class="seat" draggable="true" ondragstart="drag(event,${i},0)" ondragover="event.preventDefault()" ondrop="drop(event,${i},0)">${g[0]}</div>
-          <div class="seat" draggable="true" ondragstart="drag(event,${i},1)" ondragover="event.preventDefault()" ondrop="drop(event,${i},1)">${g[1]}</div>
-          <div class="seat" draggable="true" ondragstart="drag(event,${i},2)" ondragover="event.preventDefault()" ondrop="drop(event,${i},2)">${g[2]}</div>
-          <div class="seat" draggable="true" ondragstart="drag(event,${i},3)" ondragover="event.preventDefault()" ondrop="drop(event,${i},3)">${g[3]}</div>
-        </div>
-        <div class="back">${g[4]}</div>
-      `;
-      box.appendChild(div);
-    });
+      let d=document.createElement("div")
+      d.className="group"
+      d.innerHTML=`<h2>第 ${i+1} 組</h2>
+      <div class="face">${g.slice(0,4).map(n=>`<div class=seat>${n}</div>`).join("")}</div>
+      <div class="back">${g[4]}</div>`
+      box.appendChild(d)
+    })
   }
 }
 
-// 組內拖拉
-let dragInfo=null;
-function drag(e,g,i){dragInfo={g,i};}
-function drop(e,g,i){if(!dragInfo||dragInfo.g!==g) return;[groupsData[g][dragInfo.i],groupsData[g][i]]=[groupsData[g][i],groupsData[g][dragInfo.i]];render();}
+function switchMode(){
+  columnMode=!columnMode
+  document.querySelector("button[onclick='switchMode()']").textContent=columnMode?"📊 小組模式":"📊 直排模式"
+  document.getElementById("genBtn").textContent=columnMode?"生成直排":"生成小組"
+  render()
+}
 
-// 投影模式（可開/離開）
 function toggleFull(){
-  if(!document.fullscreenElement){
-    document.documentElement.requestFullscreen?.();
-    document.body.classList.add("fullscreen");
-  } else {
-    document.exitFullscreen?.();
-    document.body.classList.remove("fullscreen");
-  }
+  document.body.classList.toggle("fullscreen")
+  document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()
 }
 
-// 直排模式切換 + 按鈕文字自動切換
-function switchColumn(){
-  columnMode=!columnMode;
-  render();
-
-  // 模式切換按鈕文字
-  const modeBtn = document.querySelector("button[onclick='switchColumn()']");
-  modeBtn.textContent = columnMode ? "📊 小組模式" : "📊 直排模式";
-
-  // 生成按鈕文字隨模式變
-  const genBtn = document.getElementById("generateBtn");
-  genBtn.textContent = columnMode ? "生成直排" : "生成小組";
-}
-
-// PDF 匯出
 function exportPDF(){
-  const container=document.createElement("div");
-  container.style.padding="10px";
-  container.style.width="800px";
-
-  const podium=document.createElement("div");
-  podium.textContent="講台";
-  podium.style.background="#f87171";
-  podium.style.color="#fff";
-  podium.style.fontWeight="bold";
-  podium.style.textAlign="center";
-  podium.style.padding="8px";
-  podium.style.borderRadius="12px";
-  podium.style.marginBottom="12px";
-  podium.style.width="100%";
-  container.appendChild(podium);
-
-  const groupsClone=document.getElementById("groups").cloneNode(true);
-  container.appendChild(groupsClone);
-
-  document.body.appendChild(container);
-  html2canvas(container).then(canvas=>{
-    const { jsPDF } = window.jspdf;
-    const pdf=new jsPDF("p","mm","a4");
-    const img=canvas.toDataURL("image/png");
-    const w=190;
-    const h=canvas.height*w/canvas.width;
-    pdf.addImage(img,"PNG",10,10,w,h);
-    pdf.save("分組座位表.pdf");
-    document.body.removeChild(container);
-  });
+  html2canvas(document.body).then(c=>{
+    const pdf=new jspdf.jsPDF("p","mm","a4")
+    pdf.addImage(c.toDataURL(),"PNG",10,10,190,0)
+    pdf.save("座位表.pdf")
+  })
 }
 
-// 重設 + 滾回名單
 function resetAll(){
-  if(confirm("確定要重設所有資料嗎？")) {
-    maleEl.value="";
-    femaleEl.value="";
-    banEl.value="";
-    document.getElementById("groups").innerHTML="";
-    groupsData=[];
-    columnMode=false;
-    const modeBtn = document.querySelector("button[onclick='switchColumn()']");
-    modeBtn.textContent = "📊 直排模式";
-    const genBtn = document.getElementById("generateBtn");
-    genBtn.textContent = "生成小組";
-    maleEl.scrollIntoView({behavior:"smooth"});
-    maleEl.focus();
+  if(confirm("確定重設？")){
+    document.querySelectorAll("textarea").forEach(t=>t.value="")
+    document.getElementById("groups").innerHTML=""
+    columnMode=false
+    document.getElementById("genBtn").textContent="生成小組"
+    document.querySelector("button[onclick='switchMode()']").textContent="📊 直排模式"
   }
 }
 </script>
