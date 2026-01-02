@@ -2,46 +2,38 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>教室分組系統</title>
-
-<!-- PDF 套件 -->
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-
+<title>教室分組系統（完整版）</title>
 <style>
 body {
-  font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  font-family: "Noto Sans TC", sans-serif;
   background: #f4f6f8;
-  padding: 20px;
   margin: 0;
+  padding: 20px;
 }
 h1 { font-size: 28px; }
-
 textarea {
   width: 100%;
   height: 120px;
   font-size: 18px;
 }
-
 button {
   font-size: 18px;
   padding: 8px 14px;
   margin: 4px;
   cursor: pointer;
 }
+.controls { margin: 10px 0; }
 
 #stage {
   margin-top: 20px;
-  background: #f4f6f8;
-  padding: 10px;
 }
 
 .stage-board {
   background: #333;
   color: #fff;
   text-align: center;
-  padding: 14px;
-  font-size: 28px;
+  padding: 12px;
+  font-size: 26px;
   margin-bottom: 20px;
 }
 
@@ -55,43 +47,43 @@ button {
   background: #fff;
   border-radius: 12px;
   padding: 10px;
+  min-height: 120px;
 }
-
 .group h3 {
   text-align: center;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 
 .seat {
   background: #e3e7ee;
-  padding: 8px;
-  margin: 6px 0;
+  padding: 6px;
+  margin: 4px 0;
   border-radius: 6px;
-  font-size: 22px;
+  font-size: 20px;
+  cursor: grab;
 }
 
 /* 直排模式 */
 .column-mode .groups {
   grid-template-columns: 1fr;
 }
-
 .column {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 /* 投影 */
 .fullscreen {
-  font-size: 34px;
+  font-size: 32px;
 }
 </style>
 </head>
 <body>
 
-<h1>🎯 教室分組系統</h1>
+<h1>🎯 教室分組系統（完整版）</h1>
 
-<h3>📋 學生名單</h3>
+<h3>📋 學生名單（20 人，每行一人）</h3>
 <textarea id="students">
 學生1
 學生2
@@ -115,14 +107,15 @@ button {
 學生20
 </textarea>
 
-<h3>🚫 不能同組</h3>
-<textarea id="banRules"></textarea>
+<h3>🚫 不能同組（每行一組，用逗號）</h3>
+<textarea id="banRules">
+學生1,學生2,學生3
+</textarea>
 
-<div>
+<div class="controls">
   <button id="generateBtn" onclick="generate()">生成小組</button>
-  <button id="modeBtn" onclick="toggleMode()">📊 直排模式</button>
+  <button onclick="toggleMode()" id="modeBtn">📊 直排模式</button>
   <button onclick="toggleFullscreen()">🖥️ 投影模式</button>
-  <button onclick="exportPDF()">🖨️ 匯出 PDF</button>
   <button onclick="resetAll()">🔄 重設</button>
 </div>
 
@@ -133,7 +126,23 @@ let columnMode = false;
 const GROUP_COUNT = 4;
 
 function getStudents(){
-  return students.value.split("\n").map(s=>s.trim()).filter(Boolean);
+  return document.getElementById("students").value
+    .split("\n").map(s=>s.trim()).filter(Boolean);
+}
+
+function parseBans(){
+  return document.getElementById("banRules").value
+    .split("\n")
+    .map(l=>l.split(",").map(n=>n.trim()).filter(Boolean))
+    .filter(a=>a.length);
+}
+
+/* 🛑 防呆 1 */
+function checkImpossibleRules(bans, groupCount){
+  for(const rule of bans){
+    if(rule.length > groupCount) return rule;
+  }
+  return null;
 }
 
 function shuffle(arr){
@@ -141,20 +150,39 @@ function shuffle(arr){
 }
 
 function generate(){
-  render(getStudents());
+  const students = getStudents();
+  const bans = parseBans();
+
+  /* 防呆 1：一定跳 */
+  const impossible = checkImpossibleRules(bans, GROUP_COUNT);
+  if(impossible){
+    alert(
+      "❌ 規則設定不可能成立\n\n" +
+      "禁止同組人數：" + impossible.length + " 人\n" +
+      "目前組數：" + GROUP_COUNT + " 組\n\n" +
+      "學生：\n" +
+      impossible.join("、")
+    );
+    return;
+  }
+
+  render(students);
 }
 
 function render(students){
+  const stage = document.getElementById("stage");
   stage.innerHTML = "";
+
   stage.className = columnMode ? "column-mode" : "";
 
+  // 講台
   const board = document.createElement("div");
   board.className = "stage-board";
   board.textContent = "📢 講台";
   stage.appendChild(board);
 
-  const groups = document.createElement("div");
-  groups.className = "groups";
+  const groupsDiv = document.createElement("div");
+  groupsDiv.className = "groups";
 
   if(columnMode){
     const col = document.createElement("div");
@@ -165,30 +193,32 @@ function render(students){
       d.textContent=s;
       col.appendChild(d);
     });
-    groups.appendChild(col);
-  }else{
-    const list = shuffle(students);
-    for(let i=0;i<4;i++){
+    groupsDiv.appendChild(col);
+  } else {
+    const shuffled = shuffle(students);
+    for(let i=0;i<GROUP_COUNT;i++){
       const g=document.createElement("div");
       g.className="group";
       g.innerHTML="<h3>第 "+(i+1)+" 組</h3>";
-      list.slice(i*5,(i+1)*5).forEach(s=>{
+      shuffled.slice(i*5,(i+1)*5).forEach(s=>{
         const d=document.createElement("div");
         d.className="seat";
         d.textContent=s;
         g.appendChild(d);
       });
-      groups.appendChild(g);
+      groupsDiv.appendChild(g);
     }
   }
 
-  stage.appendChild(groups);
+  stage.appendChild(groupsDiv);
 }
 
 function toggleMode(){
   columnMode=!columnMode;
-  modeBtn.textContent = columnMode ? "📊 小組模式" : "📊 直排模式";
-  generateBtn.textContent = columnMode ? "生成直排" : "生成小組";
+  document.getElementById("modeBtn").textContent =
+    columnMode ? "📊 小組模式" : "📊 直排模式";
+  document.getElementById("generateBtn").textContent =
+    columnMode ? "生成直排" : "生成小組";
 }
 
 function toggleFullscreen(){
@@ -201,19 +231,8 @@ function toggleFullscreen(){
   }
 }
 
-function exportPDF(){
-  html2canvas(stage,{scale:2}).then(canvas=>{
-    const img = canvas.toDataURL("image/png");
-    const pdf = new jspdf.jsPDF("p","mm","a4");
-    const w = 210;
-    const h = canvas.height * w / canvas.width;
-    pdf.addImage(img,"PNG",0,10,w,h);
-    pdf.save("座位表.pdf");
-  });
-}
-
 function resetAll(){
-  stage.innerHTML="";
+  document.getElementById("stage").innerHTML="";
 }
 </script>
 
