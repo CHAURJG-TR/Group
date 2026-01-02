@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>分組座位系統</title>
+<title>分組座位系統（男女分組＋講台）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body{font-family:"Microsoft JhengHei",Arial;background:#f1f5f9;padding:20px;}
@@ -23,12 +23,13 @@ button:disabled{opacity:.5;}
 </head>
 <body>
 
-<h1>分組座位系統（講台版 PDF）</h1>
+<h1>分組座位系統（男女分組＋講台）</h1>
 
 <!-- 講台在前面 -->
 <div id="podium">講台</div>
 
-<textarea id="students" rows="10" placeholder="學生名單（20 人，每行一人）"></textarea>
+<textarea id="male" rows="6" placeholder="男生名單（10 人，每行一人）"></textarea>
+<textarea id="female" rows="6" placeholder="女生名單（10 人，每行一人）"></textarea>
 <textarea id="ban" rows="3" placeholder="不能同一組，每行一條，用 , 分隔"></textarea>
 
 <button onclick="makeGroups()">生成分組</button>
@@ -41,7 +42,8 @@ button:disabled{opacity:.5;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-const studentsEl = document.getElementById("students");
+const maleEl = document.getElementById("male");
+const femaleEl = document.getElementById("female");
 const banEl = document.getElementById("ban");
 let groupsData=[];
 
@@ -52,17 +54,20 @@ function parseBans(){return banEl.value.split('\n').map(l=>l.split(',').map(s=>s
 function validGroup(g,bans){return !bans.some(r=>r.every(n=>g.includes(n)));}
 
 function makeGroups(){
-  let students=parseLines(studentsEl);
-  if(students.length!==20){alert("⚠️ 名單需 20 人"); return;}
+  const male=parseLines(maleEl);
+  const female=parseLines(femaleEl);
+  if(male.length!==10 || female.length!==10){alert("⚠️ 男生/女生各需 10 人"); return;}
   const bans=parseBans();
   
   let attempt=0, success=false;
   while(attempt<800 && !success){
     attempt++;
-    shuffle(students);
-    let temp=[...students], res=[], ok=true;
+    shuffle(male); shuffle(female);
+    let tempMale=[...male], tempFemale=[...female], res=[];
+    let ok=true;
+
     for(let i=0;i<4;i++){
-      let g=temp.splice(0,5);
+      let g=i<2 ? tempMale.splice(0,5) : tempFemale.splice(0,5);
       if(!validGroup(g,bans)){ok=false;break;}
       res.push(g);
     }
@@ -137,3 +142,4 @@ function exportPDF(){
 
 </body>
 </html>
+
