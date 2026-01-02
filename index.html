@@ -2,100 +2,37 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>抽籤分組座位系統</title>
+<title>分組座位系統（老師版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
-body{
-  font-family:"Microsoft JhengHei",Arial;
-  background:#f1f5f9;
-  padding:20px;
-}
+body{font-family:"Microsoft JhengHei",Arial;background:#f1f5f9;padding:20px;}
 h1{text-align:center}
-
-textarea,button{
-  width:100%;
-  font-size:18px;
-  padding:12px;
-  margin:6px 0;
-}
-
-button{
-  border:none;
-  border-radius:12px;
-  background:#2563eb;
-  color:#fff;
-  cursor:pointer;
-}
-
-#groups{
-  display:grid;
-  grid-template-columns:repeat(2,1fr);
-  gap:24px;
-  margin-top:20px;
-}
-
-.group{
-  background:#e5e7eb;
-  padding:14px;
-  border-radius:16px;
-  box-shadow:0 4px 10px rgba(0,0,0,.15);
-}
-
-.group h2{text-align:center}
-
-.face{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:18px 40px;
-  justify-items:center;
-}
-
-.seat,.back{
-  background:#fff;
-  width:110px;
-  height:60px;
-  border-radius:12px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:18px;
-}
-
-.back{
-  background:#fde68a;
-  margin:10px auto 0;
-}
-
-/* 抽籤畫面 */
-#draw{
-  position:fixed;
-  inset:0;
-  background:#020617;
-  color:#fff;
-  font-size:80px;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:999;
-}
-
+textarea,button{width:100%;font-size:18px;padding:12px;margin:6px 0;}
+button{border:none;border-radius:12px;background:#2563eb;color:#fff;cursor:pointer;}
+button:disabled{opacity:.5;}
+#groups{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:20px;}
+.group{background:#e5e7eb;padding:14px;border-radius:16px;box-shadow:0 4px 10px rgba(0,0,0,.15);}
+.group h2{text-align:center;}
+.face{display:grid;grid-template-columns:1fr 1fr;gap:18px 40px;justify-items:center;margin-bottom:10px;}
+.seat,.back{background:#fff;width:110px;height:60px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.back{background:#fde68a;margin:10px auto 0;}
+#draw{position:fixed;inset:0;background:#020617;color:#fff;font-size:80px;display:none;align-items:center;justify-content:center;z-index:999;}
 .flash{animation:flash .2s alternate 6}
-@keyframes flash{
-  from{background:#020617}
-  to{background:#2563eb}
-}
+@keyframes flash{from{background:#020617} to{background:#2563eb}}
+.fullscreen textarea,.fullscreen button{display:none;}
+.fullscreen .seat,.fullscreen .back{font-size:32px;height:100px;}
 </style>
 </head>
-
 <body>
 
-<h1>🎯 抽籤分組座位</h1>
+<h1>🎯 分組座位系統（老師版）</h1>
 
-<textarea id="students" rows="6"
-placeholder="學生名單（20 人，每行一人）"></textarea>
+<textarea id="students" rows="6" placeholder="學生名單（20 人，每行一人）"></textarea>
+<textarea id="ban" rows="3" placeholder="不能同一組，每行一條，用 , 分隔"></textarea>
+<textarea id="fixedBack" rows="2" placeholder="固定坐後面（組長，每行一人）"></textarea>
 
 <button onclick="drawAndGroup()">🎯 抽籤分組（動畫）</button>
+<button onclick="toggleFull()">🖥️ 投影模式</button>
 <button onclick="exportPDF()">🖨️ 匯出 PDF</button>
 
 <div id="groups"></div>
@@ -105,49 +42,58 @@ placeholder="學生名單（20 人，每行一人）"></textarea>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-const drawEl = document.getElementById("draw");
-const studentsEl = document.getElementById("students");
+const drawEl=document.getElementById("draw");
+const studentsEl=document.getElementById("students");
+const banEl=document.getElementById("ban");
+const fixedEl=document.getElementById("fixedBack");
 let groupsData=[];
 
-function shuffle(a){
-  for(let i=a.length-1;i>0;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
-  }
-}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+
+function parseLines(el){return el.value.split('\n').map(s=>s.trim()).filter(Boolean);}
+function parseBans(){return banEl.value.split('\n').map(l=>l.split(',').map(s=>s.trim()).filter(Boolean)).filter(r=>r.length>=2);}
+
+function validGroup(g,bans){return !bans.some(r=>r.every(n=>g.includes(n)));}
 
 function drawAndGroup(){
-  let list = studentsEl.value.split('\n').map(s=>s.trim()).filter(Boolean);
-  if(list.length!==20){
-    alert("⚠️ 需要剛好 20 人（4 組）");
-    return;
-  }
-
+  let list=parseLines(studentsEl);
+  if(list.length<20){alert("⚠️ 名單不足 20 人"); return;}
   drawEl.style.display="flex";
   let t=30;
-  const beep = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
+  const beep=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
   const timer=setInterval(()=>{
-    drawEl.textContent = list[Math.floor(Math.random()*list.length)];
+    drawEl.textContent=list[Math.floor(Math.random()*list.length)];
     beep.play();
     t--;
     if(t<=0){
       clearInterval(timer);
       drawEl.classList.add("flash");
-      setTimeout(()=>{
-        drawEl.style.display="none";
-        drawEl.classList.remove("flash");
-        makeGroups(list);
-      },800);
+      setTimeout(()=>{drawEl.style.display="none";drawEl.classList.remove("flash");makeGroups(list);},800);
     }
   },100);
 }
 
 function makeGroups(students){
-  shuffle(students);
-  groupsData=[];
-  for(let i=0;i<4;i++){
-    groupsData.push(students.slice(i*5,i*5+5));
+  const bans=parseBans();
+  const fixed=parseLines(fixedEl);
+  let attempt=0, success=false;
+
+  while(attempt<800 && !success){
+    attempt++;
+    shuffle(students);
+    let temp=[...students], ok=true, res=[];
+
+    for(let i=0;i<4;i++){
+      let g=temp.splice(0,5);
+      if(!validGroup(g,bans)){ok=false;break;}
+      const fb=g.filter(n=>fixed.includes(n));
+      if(fb.length>1){ok=false;break;}
+      if(fb.length===1){g=g.filter(n=>n!==fb[0]); g.push(fb[0]);}
+      res.push(g);
+    }
+    if(ok){groupsData=res;success=true;break;}
   }
+  if(!success){alert("❌ 規則衝突，無法完成分組"); return;}
   render();
 }
 
@@ -155,24 +101,34 @@ function render(){
   const box=document.getElementById("groups");
   box.innerHTML="";
   groupsData.forEach((g,i)=>{
-    box.innerHTML+=`
-    <div class="group">
+    const div=document.createElement("div");
+    div.className="group";
+    div.innerHTML=`
       <h2>第 ${i+1} 組</h2>
       <div class="face">
-        <div class="seat">${g[0]}</div>
-        <div class="seat">${g[1]}</div>
-        <div class="seat">${g[2]}</div>
-        <div class="seat">${g[3]}</div>
+        <div class="seat" draggable="true" ondragstart="drag(event,${i},0)" ondragover="event.preventDefault()" ondrop="drop(event,${i},0)">${g[0]}</div>
+        <div class="seat" draggable="true" ondragstart="drag(event,${i},1)" ondragover="event.preventDefault()" ondrop="drop(event,${i},1)">${g[1]}</div>
+        <div class="seat" draggable="true" ondragstart="drag(event,${i},2)" ondragover="event.preventDefault()" ondrop="drop(event,${i},2)">${g[2]}</div>
+        <div class="seat" draggable="true" ondragstart="drag(event,${i},3)" ondragover="event.preventDefault()" ondrop="drop(event,${i},3)">${g[3]}</div>
       </div>
       <div class="back">${g[4]}</div>
-    </div>`;
+    `;
+    box.appendChild(div);
   });
 }
 
-/* PDF：畫面轉檔（不會亂碼） */
+/* 拖拉換位（組內） */
+let dragInfo=null;
+function drag(e,g,i){dragInfo={g,i};}
+function drop(e,g,i){if(!dragInfo||dragInfo.g!==g) return;[groupsData[g][dragInfo.i],groupsData[g][i]]=[groupsData[g][i],groupsData[g][dragInfo.i]];render();}
+
+/* 全螢幕投影 */
+function toggleFull(){document.body.classList.toggle("fullscreen");document.documentElement.requestFullscreen?.();}
+
+/* PDF 匯出 */
 function exportPDF(){
-  const { jsPDF } = window.jspdf;
   html2canvas(document.getElementById("groups")).then(canvas=>{
+    const { jsPDF } = window.jspdf;
     const pdf=new jsPDF("p","mm","a4");
     const img=canvas.toDataURL("image/png");
     const w=190;
