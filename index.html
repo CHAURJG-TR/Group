@@ -2,83 +2,220 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>分組防呆測試版</title>
+<title>教室分組系統（PDF完整版）</title>
+
+<!-- PDF 套件 -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
 <style>
 body {
-  font-family: "Noto Sans TC", sans-serif;
+  font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  background: #f4f6f8;
   padding: 20px;
-  background: #f5f6f7;
+  margin: 0;
 }
-textarea, input {
+h1 { font-size: 28px; }
+
+textarea {
   width: 100%;
+  height: 120px;
   font-size: 18px;
-  margin-bottom: 10px;
 }
+
 button {
-  font-size: 20px;
-  padding: 10px 20px;
+  font-size: 18px;
+  padding: 8px 14px;
+  margin: 4px;
+  cursor: pointer;
 }
+
+#stage {
+  margin-top: 20px;
+  background: #f4f6f8;
+  padding: 10px;
+}
+
+.stage-board {
+  background: #333;
+  color: #fff;
+  text-align: center;
+  padding: 14px;
+  font-size: 28px;
+  margin-bottom: 20px;
+}
+
+.groups {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
 .group {
   background: #fff;
+  border-radius: 12px;
   padding: 10px;
-  margin-top: 10px;
+}
+
+.group h3 {
+  text-align: center;
+  margin: 0 0 10px;
+}
+
+.seat {
+  background: #e3e7ee;
+  padding: 8px;
+  margin: 6px 0;
+  border-radius: 6px;
   font-size: 22px;
-  border-radius: 8px;
+}
+
+/* 直排模式 */
+.column-mode .groups {
+  grid-template-columns: 1fr;
+}
+
+.column {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+/* 投影 */
+.fullscreen {
+  font-size: 34px;
 }
 </style>
 </head>
 <body>
 
-<h1>🛑 分組防呆 1（一定跳提示）</h1>
+<h1>🎯 教室分組系統</h1>
 
-<h3>組數</h3>
-<input id="groupCount" type="number" value="2" min="1">
-
-<h3>學生名單（每行一人）</h3>
+<h3>📋 學生名單</h3>
 <textarea id="students">
-A
-B
-C
-D
-E
+學生1
+學生2
+學生3
+學生4
+學生5
+學生6
+學生7
+學生8
+學生9
+學生10
+學生11
+學生12
+學生13
+學生14
+學生15
+學生16
+學生17
+學生18
+學生19
+學生20
 </textarea>
 
-<h3>🚫 不能同組（每行一組，用逗號）</h3>
-<textarea id="banRules">
-A,B,C
-</textarea>
+<h3>🚫 不能同組</h3>
+<textarea id="banRules"></textarea>
 
-<button onclick="makeGroups()">🎲 生成分組</button>
+<div>
+  <button id="generateBtn" onclick="generate()">生成小組</button>
+  <button id="modeBtn" onclick="toggleMode()">📊 直排模式</button>
+  <button onclick="toggleFullscreen()">🖥️ 投影模式</button>
+  <button onclick="exportPDF()">🖨️ 匯出 PDF</button>
+  <button onclick="resetAll()">🔄 重設</button>
+</div>
 
-<div id="result"></div>
+<div id="stage"></div>
 
 <script>
+let columnMode = false;
+const GROUP_COUNT = 4;
+
 function getStudents(){
-  return document.getElementById("students").value
-    .split("\n").map(s => s.trim()).filter(Boolean);
+  return students.value.split("\n").map(s=>s.trim()).filter(Boolean);
 }
 
-function parseBans(){
-  return document.getElementById("banRules").value
-    .split("\n")
-    .map(line => line.split(",").map(n => n.trim()).filter(Boolean))
-    .filter(arr => arr.length);
+function shuffle(arr){
+  return [...arr].sort(()=>Math.random()-0.5);
 }
 
-// 🔴 防呆 1：規則本身數學上不可能
-function checkImpossibleRules(bans, groupCount){
-  for(const rule of bans){
-    if(rule.length > groupCount){
-      return rule;
+function generate(){
+  render(getStudents());
+}
+
+function render(students){
+  stage.innerHTML = "";
+  stage.className = columnMode ? "column-mode" : "";
+
+  const board = document.createElement("div");
+  board.className = "stage-board";
+  board.textContent = "📢 講台";
+  stage.appendChild(board);
+
+  const groups = document.createElement("div");
+  groups.className = "groups";
+
+  if(columnMode){
+    const col = document.createElement("div");
+    col.className = "column";
+    shuffle(students).forEach(s=>{
+      const d=document.createElement("div");
+      d.className="seat";
+      d.textContent=s;
+      col.appendChild(d);
+    });
+    groups.appendChild(col);
+  }else{
+    const list = shuffle(students);
+    for(let i=0;i<4;i++){
+      const g=document.createElement("div");
+      g.className="group";
+      g.innerHTML="<h3>第 "+(i+1)+" 組</h3>";
+      list.slice(i*5,(i+1)*5).forEach(s=>{
+        const d=document.createElement("div");
+        d.className="seat";
+        d.textContent=s;
+        g.appendChild(d);
+      });
+      groups.appendChild(g);
     }
   }
-  return null;
+
+  stage.appendChild(groups);
 }
 
-function makeGroups(){
-  const students = getStudents();
-  const bans = parseBans();
-  const groupCount = parseInt(document.getElementById("groupCount").value);
+function toggleMode(){
+  columnMode=!columnMode;
+  modeBtn.textContent = columnMode ? "📊 小組模式" : "📊 直排模式";
+  generateBtn.textContent = columnMode ? "生成直排" : "生成小組";
+}
 
-  // 🛑 一定會先跑到這
-  const impossible = checkImpossibleRules(bans, groupCount
+function toggleFullscreen(){
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen();
+    document.body.classList.add("fullscreen");
+  }else{
+    document.exitFullscreen();
+    document.body.classList.remove("fullscreen");
+  }
+}
+
+function exportPDF(){
+  html2canvas(stage,{scale:2}).then(canvas=>{
+    const img = canvas.toDataURL("image/png");
+    const pdf = new jspdf.jsPDF("p","mm","a4");
+    const w = 210;
+    const h = canvas.height * w / canvas.width;
+    pdf.addImage(img,"PNG",0,10,w,h);
+    pdf.save("座位表.pdf");
+  });
+}
+
+function resetAll(){
+  stage.innerHTML="";
+}
+</script>
+
+</body>
+</html>
