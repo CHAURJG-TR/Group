@@ -2,161 +2,223 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
+<title>分組座位系統（最終版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>課堂分組系統｜防呆完整版</title>
 
 <style>
-body{font-family:"Microsoft JhengHei",Arial;background:#eef2f7;padding:20px}
+body{
+  font-family:"Microsoft JhengHei",Arial;
+  background:#f1f5f9;
+  padding:20px;
+}
 h1{text-align:center}
-textarea,input{width:100%;font-size:18px;padding:10px;margin:6px 0}
-button{font-size:18px;padding:12px 18px;margin:5px;border:none;border-radius:10px;cursor:pointer}
-.primary{background:#2563eb;color:#fff}
-.gray{background:#6b7280;color:#fff}
-.warn{background:#dc2626;color:#fff}
-.group{background:#fff;margin:12px 0;padding:16px;border-radius:14px;
-font-size:28px;box-shadow:0 4px 10px rgba(0,0,0,.15);animation:pop .4s}
-.member{display:inline-block;padding:6px 14px;margin:6px;background:#e0e7ff;
-border-radius:10px;cursor:grab}
-.draw{font-size:120px;text-align:center;margin:20px}
-.fullscreen textarea,.fullscreen input,.fullscreen .controls{display:none}
-.fullscreen .group{font-size:48px}
-@keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+
+textarea,button{
+  width:100%;
+  font-size:18px;
+  padding:12px;
+  margin:6px 0;
+}
+
+button{
+  border:none;
+  border-radius:12px;
+  background:#2563eb;
+  color:#fff;
+  cursor:pointer;
+}
+
+#groups{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:24px;
+  margin-top:20px;
+}
+
+.group{
+  background:#e5e7eb;
+  padding:14px;
+  border-radius:16px;
+  box-shadow:0 4px 10px rgba(0,0,0,.15);
+}
+
+.group h2{text-align:center}
+
+.face{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px 40px;
+  justify-items:center;
+  margin-bottom:10px;
+}
+
+.seat,.back{
+  background:#fff;
+  width:110px;
+  height:60px;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:18px;
+}
+
+.back{
+  background:#fde68a;
+  margin:0 auto;
+}
+
+.seat[draggable="true"]{cursor:grab}
+
+.fullscreen textarea,
+.fullscreen button{display:none}
+
+.fullscreen .seat,
+.fullscreen .back{
+  font-size:32px;
+  height:100px;
+}
 </style>
 </head>
 
 <body>
 
-<h1>🎓 課堂分組系統（防呆完整版）</h1>
+<h1>🎲 分組座位（4 組｜面對面）</h1>
 
-<div class="controls">
-<textarea id="students" rows="6" placeholder="學生名單（每行一人）"></textarea>
-<input id="size" type="number" value="3" min="2">
-<button class="primary" onclick="safeGroup(makeGroup)">🎲 隨機分組</button>
-<button class="primary" onclick="safeDraw(drawStudent)">🎯 抽學生</button>
-<button class="gray" onclick="toggleFull()">🖥️ 投影模式</button>
-<button class="gray" onclick="safeExport(exportPDF)">📄 PDF</button>
-<button class="gray" onclick="safeExport(exportCSV)">📊 Excel</button>
-<button class="warn" onclick="resetAll()">🔄 重置</button>
-</div>
+<textarea id="students" rows="6" placeholder="學生名單（20 人，每行一人）"></textarea>
 
-<div id="draw" class="draw"></div>
-<div id="result"></div>
+<textarea id="ban" rows="3"
+placeholder="不能同一組（每行一條，用 , 分隔）"></textarea>
 
-<audio id="beep" src="sounds/beep.mp3"></audio>
-<audio id="drawSound" src="sounds/draw.mp3"></audio>
-<audio id="okSound" src="sounds/success.mp3"></audio>
+<textarea id="fixedBack" rows="2"
+placeholder="固定坐後面（每行一人，例如組長）"></textarea>
+
+<button onclick="makeGroups()">🎯 隨機分組</button>
+<button onclick="exportPDF()">🖨️ 匯出 PDF</button>
+<button onclick="toggleFull()">🖥️ 投影模式</button>
+
+<div id="groups"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-
 <script>
-let groups=[], drawn=[], busy=false;
-const studentsEl=document.getElementById("students");
-studentsEl.value=localStorage.students||"";
-studentsEl.oninput=()=>localStorage.students=studentsEl.value;
+const studentsEl = document.getElementById("students");
+const banEl = document.getElementById("ban");
+const fixedEl = document.getElementById("fixedBack");
 
-function vibrate(ms){navigator.vibrate&&navigator.vibrate(ms);}
-function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}}
+studentsEl.value = localStorage.students || "";
+banEl.value = localStorage.ban || "";
+fixedEl.value = localStorage.fixed || "";
 
-function cleanStudents(){
-  return [...new Set(studentsEl.value.split('\n').map(s=>s.trim()).filter(Boolean))];
+studentsEl.oninput = ()=>localStorage.students = studentsEl.value;
+banEl.oninput = ()=>localStorage.ban = banEl.value;
+fixedEl.oninput = ()=>localStorage.fixed = fixedEl.value;
+
+let groupsData = [];
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
 }
 
-function lock(v){
-  busy=v;
-  document.querySelectorAll("button").forEach(b=>{b.disabled=v;b.style.opacity=v?.5:1});
+function parseLines(el){
+  return el.value.split('\n').map(s=>s.trim()).filter(Boolean);
 }
 
-function safeGroup(fn){
-  if(busy) return;
-  const s=cleanStudents();
-  if(s.length<2) return alert("至少 2 位學生");
-  lock(true); fn(s,Math.max(2,+size.value||2)); lock(false);
+function validGroup(g,bans){
+  return !bans.some(r => r.every(n => g.includes(n)));
 }
 
-function makeGroup(students,size){
-  shuffle(students); groups=[];
-  for(let i=0;i<students.length;i+=size) groups.push(students.slice(i,i+size));
-  document.getElementById("okSound").play();
-  render();
+function makeGroups(){
+  let students = parseLines(studentsEl);
+  if(students.length !== 20){
+    alert("⚠️ 固定 20 人（4 組）");
+    return;
+  }
+
+  const bans = banEl.value.split('\n')
+    .map(l=>l.split(',').map(s=>s.trim()).filter(Boolean))
+    .filter(r=>r.length>=2);
+
+  const fixed = parseLines(fixedEl);
+
+  for(let t=0;t<800;t++){
+    shuffle(students);
+    let tmp=[...students], ok=true, res=[];
+
+    for(let i=0;i<4;i++){
+      let g=tmp.splice(0,5);
+      if(!validGroup(g,bans)) {ok=false;break;}
+
+      const fb = g.filter(n=>fixed.includes(n));
+      if(fb.length>1){ok=false;break;}
+
+      if(fb.length===1){
+        g = g.filter(n=>n!==fb[0]);
+        g.push(fb[0]); // 固定後面
+      }
+      res.push(g);
+    }
+
+    if(ok){
+      groupsData=res;
+      render();
+      return;
+    }
+  }
+  alert("❌ 規則衝突，請調整設定");
 }
 
 function render(){
-  const r=document.getElementById("result"); r.innerHTML="";
-  groups.forEach((g,i)=>{
-    const d=document.createElement("div"); d.className="group";
-    d.innerHTML=`第 ${i+1} 組：`;
-    g.forEach(m=>{
-      const s=document.createElement("span");
-      s.className="member"; s.textContent=m; s.draggable=true;
-      s.ondragstart=e=>e.dataTransfer.setData("t",m);
-      s.ondragover=e=>e.preventDefault();
-      s.ondrop=e=>{swap(m,e.dataTransfer.getData("t"))};
-      d.appendChild(s);
-    });
-    r.appendChild(d);
+  const box=document.getElementById("groups");
+  box.innerHTML="";
+
+  groupsData.forEach((g,gi)=>{
+    const div=document.createElement("div");
+    div.className="group";
+    div.innerHTML=`
+      <h2>第 ${gi+1} 組</h2>
+      <div class="face">
+        ${g.slice(0,4).map((n,i)=>`
+          <div class="seat" draggable="true"
+           ondragstart="drag(event,${gi},${i})"
+           ondragover="event.preventDefault()"
+           ondrop="drop(event,${gi},${i})">${n}</div>`).join("")}
+      </div>
+      <div class="back">${g[4]}</div>
+    `;
+    box.appendChild(div);
   });
 }
 
-function swap(a,b){
-  if(a===b) return;
-  groups.forEach(g=>{
-    if(g.includes(a)) g[g.indexOf(a)]=b;
-    else if(g.includes(b)) g[g.indexOf(b)]=a;
-  });
+let dragInfo=null;
+function drag(e,g,i){ dragInfo={g,i}; }
+function drop(e,g,i){
+  if(!dragInfo || dragInfo.g!==g) return;
+  [groupsData[g][dragInfo.i],groupsData[g][i]]=
+  [groupsData[g][i],groupsData[g][dragInfo.i]];
   render();
 }
 
-async function safeDraw(fn){
-  if(busy) return;
-  const s=cleanStudents().filter(x=>!drawn.includes(x));
-  if(!s.length) return alert("已全部抽完");
-  lock(true); await fn(s); lock(false);
-}
+function exportPDF(){
+  const { jsPDF } = window.jspdf;
+  const pdf=new jsPDF();
+  let y=20;
 
-async function drawStudent(pool){
-  const d=document.getElementById("draw");
-  for(let i=3;i>0;i--){
-    d.textContent=i; beep.play(); vibrate(80);
-    await new Promise(r=>setTimeout(r,1000));
-  }
-  const r=pool[Math.random()*pool.length|0];
-  drawn.push(r);
-  drawSound.play(); vibrate([200,100,200]);
-  d.textContent="🎯 "+r;
+  groupsData.forEach((g,i)=>{
+    pdf.setFontSize(14);
+    pdf.text(`第 ${i+1} 組`,10,y); y+=8;
+    g.forEach(n=>{ pdf.text("• "+n,14,y); y+=7; });
+    y+=5;
+  });
+
+  pdf.save("分組座位表.pdf");
 }
 
 function toggleFull(){
   document.body.classList.toggle("fullscreen");
   document.documentElement.requestFullscreen?.();
-}
-
-function safeExport(fn){
-  if(!groups.length) return alert("尚未分組");
-  fn();
-}
-
-function exportCSV(){
-  let csv="組別,學生\n";
-  groups.forEach((g,i)=>g.forEach(s=>csv+=`第${i+1}組,${s}\n`));
-  const b=new Blob(["\ufeff"+csv],{type:"text/csv"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(b); a.download="分組結果.csv"; a.click();
-}
-
-function exportPDF(){
-  html2canvas(result).then(c=>{
-    const pdf=new jspdf.jsPDF();
-    const w=pdf.internal.pageSize.getWidth();
-    pdf.addImage(c.toDataURL(),"PNG",0,0,w,c.height*w/c.width);
-    pdf.save("分組結果.pdf");
-  });
-}
-
-function resetAll(){
-  if(!confirm("確定重置？")) return;
-  groups=[]; drawn=[];
-  result.innerHTML=""; draw.textContent="";
 }
 </script>
 
