@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>分組座位系統</title>
+<title>分組座位系統（男女分組＋講台）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body{font-family:"Microsoft JhengHei",Arial;background:#f1f5f9;padding:20px;}
@@ -23,7 +23,7 @@ button:disabled{opacity:.5;}
 </head>
 <body>
 
-<h1>分組座位系統</h1>
+<h1>分組座位系統（男女分組＋講台）</h1>
 
 <!-- 講台在前面 -->
 <div id="podium">講台</div>
@@ -35,6 +35,7 @@ button:disabled{opacity:.5;}
 <button onclick="makeGroups()">生成分組</button>
 <button onclick="toggleFull()">🖥️ 投影模式</button>
 <button onclick="exportPDF()">🖨️ 匯出 PDF</button>
+<button onclick="resetAll()">🔄 重設</button>
 
 <div id="groups"></div>
 
@@ -137,6 +138,20 @@ function exportPDF(){
     pdf.save("分組座位表.pdf");
     document.body.removeChild(container);
   });
+}
+
+// 🔄 重設功能 + 自動滾回名單
+function resetAll(){
+  if(confirm("確定要重設所有資料嗎？")) {
+    maleEl.value="";
+    femaleEl.value="";
+    banEl.value="";
+    document.getElementById("groups").innerHTML="";
+    groupsData=[];
+    // 自動滾動到男生名單區
+    maleEl.scrollIntoView({behavior:"smooth"});
+    maleEl.focus();
+  }
 }
 </script>
 
