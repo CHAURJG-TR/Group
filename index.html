@@ -1,139 +1,135 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>分組座位系統（完整版）</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>學生分組（防呆版）</title>
 <style>
-body{font-family:"Microsoft JhengHei",Arial;background:#f1f5f9;padding:20px}
-h1{text-align:center}
-textarea,button{width:100%;font-size:18px;padding:12px;margin:6px 0}
-button{border:none;border-radius:12px;background:#2563eb;color:#fff;cursor:pointer}
-#groups{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:20px}
-.group{background:#e5e7eb;padding:14px;border-radius:16px}
-.group h2{text-align:center}
-.face{display:grid;grid-template-columns:1fr 1fr;gap:20px 40px;justify-items:center}
-.seat,.back{background:#fff;width:120px;height:60px;border-radius:12px;display:flex;align-items:center;justify-content:center}
-.back{background:#fde68a;margin:10px auto}
-#podium{background:#f87171;color:#fff;font-weight:bold;text-align:center;padding:10px;border-radius:12px;width:120px;margin:0 auto 12px}
-.fullscreen textarea,.fullscreen button{display:none}
-.fullscreen .seat,.fullscreen .back{font-size:32px;height:100px}
+body {
+  font-family: "Noto Sans TC", sans-serif;
+  background: #f4f6f8;
+  padding: 20px;
+}
+
+h1 {
+  font-size: 28px;
+}
+
+textarea {
+  width: 100%;
+  height: 120px;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+button {
+  font-size: 20px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.group {
+  background: white;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 15px;
+  font-size: 22px;
+}
 </style>
 </head>
 <body>
 
-<h1>分組座位系統</h1>
-<div id="podium">講台</div>
+<h1>🎯 學生隨機分組（含防呆）</h1>
 
-<textarea id="male" placeholder="男生名單（10 人，每行一人）"></textarea>
-<textarea id="female" placeholder="女生名單（10 人，每行一人）"></textarea>
-<textarea id="ban" placeholder="不能同組（多人可，一行一條，用 , 分隔）"></textarea>
+<h3>📋 學生名單（每行一人）</h3>
+<textarea id="students">
+王小明
+李小華
+陳大雄
+林小美
+張小強
+黃小芬
+吳小傑
+鄭小芳
+何小龍
+蔡小玲
+</textarea>
 
-<button id="genBtn" onclick="makeGroups()">生成小組</button>
-<button onclick="switchMode()">📊 直排模式</button>
-<button onclick="toggleFull()">🖥️ 投影模式</button>
-<button onclick="exportPDF()">🖨️ 匯出 PDF</button>
-<button onclick="resetAll()">🔄 重設</button>
+<h3>🚫 不能同組（每行一組，用逗號分隔）</h3>
+<textarea id="banRules">
+王小明,李小華,陳大雄
+</textarea>
 
-<div id="groups"></div>
+<button onclick="makeGroups()">🎲 生成分組</button>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<div id="result"></div>
 
 <script>
-let groupsData=[], columnMode=false, dragInfo=null
+const GROUP_COUNT = 4;
 
-const parse = el => el.value.split("\n").map(s=>s.trim()).filter(Boolean)
-const parseBans = () => parse(document.getElementById("ban")).map(l=>l.split(",").map(s=>s.trim()))
-const shuffle = a => {for(let i=a.length-1;i>0;i--){let j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}}
-
-function impossibleRule(bans, groups){
-  for(const r of bans) if(r.length > groups) return r
-  return null
+// 解析學生
+function getStudents(){
+  return document.getElementById("students")
+    .value.split("\n")
+    .map(s => s.trim())
+    .filter(s => s);
 }
 
-function validGroup(g,bans){return !bans.some(r=>r.every(n=>g.includes(n)))}
+// 解析禁止規則
+function parseBans(){
+  return document.getElementById("banRules")
+    .value.split("\n")
+    .map(line =>
+      line.split(",").map(n => n.trim()).filter(n => n)
+    )
+    .filter(arr => arr.length > 0);
+}
+
+// 🔴 防呆 1：規則本身不可能
+function checkImpossibleRules(bans, groupCount){
+  for(const rule of bans){
+    if(rule.length > groupCount){
+      return rule;
+    }
+  }
+  return null;
+}
+
+function shuffle(arr){
+  return arr.sort(() => Math.random() - 0.5);
+}
 
 function makeGroups(){
-  const male=parse(male), female=parse(female), bans=parseBans()
-  if(male.length!==10||female.length!==10){alert("男生、女生各需 10 人");return}
+  const students = getStudents();
+  const bans = parseBans();
 
-  const bad = impossibleRule(bans,4)
-  if(bad){alert("❌ 規則不可能成立\n\n"+bad.join("、"));return}
-
-  for(let t=0;t<800;t++){
-    shuffle(male); shuffle(female)
-    let res=[], ok=true
-    for(let i=0;i<4;i++){
-      let g=i<2?male.splice(0,5):female.splice(0,5)
-      if(!validGroup(g,bans)){ok=false;break}
-      res.push(g)
-    }
-    if(ok){groupsData=res;render();return}
+  // 🚨 防呆 1（一定跳 alert）
+  const impossible = checkImpossibleRules(bans, GROUP_COUNT);
+  if(impossible){
+    alert(
+      "❌ 規則設定不可能成立\n\n" +
+      "以下學生人數（" + impossible.length + " 人）\n" +
+      "大於目前組數（" + GROUP_COUNT + " 組）：\n\n" +
+      impossible.join("、") +
+      "\n\n請調整禁止同組名單或增加組數"
+    );
+    return;
   }
-  alert("❌ 規則衝突，無法完成分組")
-}
 
-function render(){
-  const box=document.getElementById("groups")
-  box.innerHTML=""
-  if(columnMode){
-    let all=groupsData.flat()
-    for(let r=0;r<4;r++){
-      let d=document.createElement("div")
-      d.className="group"
-      d.innerHTML=`<h2>第 ${r+1} 排</h2>`
-      let f=document.createElement("div")
-      f.className="face"
-      f.style.gridTemplateColumns="repeat(5,1fr)"
-      for(let c=0;c<5;c++){
-        let s=document.createElement("div")
-        s.className="seat"
-        s.textContent=all[r*5+c]||""
-        f.appendChild(s)
-      }
-      d.appendChild(f); box.appendChild(d)
-    }
-  }else{
-    groupsData.forEach((g,i)=>{
-      let d=document.createElement("div")
-      d.className="group"
-      d.innerHTML=`<h2>第 ${i+1} 組</h2>
-      <div class="face">${g.slice(0,4).map(n=>`<div class=seat>${n}</div>`).join("")}</div>
-      <div class="back">${g[4]}</div>`
-      box.appendChild(d)
-    })
-  }
-}
+  // 以下只是簡單示範分組（重點在防呆）
+  const groups = Array.from({length: GROUP_COUNT}, () => []);
+  shuffle(students).forEach((s, i) => {
+    groups[i % GROUP_COUNT].push(s);
+  });
 
-function switchMode(){
-  columnMode=!columnMode
-  document.querySelector("button[onclick='switchMode()']").textContent=columnMode?"📊 小組模式":"📊 直排模式"
-  document.getElementById("genBtn").textContent=columnMode?"生成直排":"生成小組"
-  render()
-}
-
-function toggleFull(){
-  document.body.classList.toggle("fullscreen")
-  document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()
-}
-
-function exportPDF(){
-  html2canvas(document.body).then(c=>{
-    const pdf=new jspdf.jsPDF("p","mm","a4")
-    pdf.addImage(c.toDataURL(),"PNG",10,10,190,0)
-    pdf.save("座位表.pdf")
-  })
-}
-
-function resetAll(){
-  if(confirm("確定重設？")){
-    document.querySelectorAll("textarea").forEach(t=>t.value="")
-    document.getElementById("groups").innerHTML=""
-    columnMode=false
-    document.getElementById("genBtn").textContent="生成小組"
-    document.querySelector("button[onclick='switchMode()']").textContent="📊 直排模式"
-  }
+  // 顯示
+  const result = document.getElementById("result");
+  result.innerHTML = "";
+  groups.forEach((g, i) => {
+    const div = document.createElement("div");
+    div.className = "group";
+    div.textContent = "第 " + (i+1) + " 組： " + g.join("、");
+    result.appendChild(div);
+  });
 }
 </script>
 
