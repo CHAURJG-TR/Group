@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>分組座位系統（最終版）</title>
+<title>抽籤分組座位系統</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -49,7 +49,6 @@ button{
   grid-template-columns:1fr 1fr;
   gap:18px 40px;
   justify-items:center;
-  margin-bottom:10px;
 }
 
 .seat,.back{
@@ -65,55 +64,50 @@ button{
 
 .back{
   background:#fde68a;
-  margin:0 auto;
+  margin:10px auto 0;
 }
 
-.seat[draggable="true"]{cursor:grab}
+/* 抽籤畫面 */
+#draw{
+  position:fixed;
+  inset:0;
+  background:#020617;
+  color:#fff;
+  font-size:80px;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:999;
+}
 
-.fullscreen textarea,
-.fullscreen button{display:none}
-
-.fullscreen .seat,
-.fullscreen .back{
-  font-size:32px;
-  height:100px;
+.flash{animation:flash .2s alternate 6}
+@keyframes flash{
+  from{background:#020617}
+  to{background:#2563eb}
 }
 </style>
 </head>
 
 <body>
 
-<h1>🎲 分組座位（4 組｜面對面）</h1>
+<h1>🎯 抽籤分組座位</h1>
 
-<textarea id="students" rows="6" placeholder="學生名單（20 人，每行一人）"></textarea>
+<textarea id="students" rows="6"
+placeholder="學生名單（20 人，每行一人）"></textarea>
 
-<textarea id="ban" rows="3"
-placeholder="不能同一組（每行一條，用 , 分隔）"></textarea>
-
-<textarea id="fixedBack" rows="2"
-placeholder="固定坐後面（每行一人，例如組長）"></textarea>
-
-<button onclick="makeGroups()">🎯 隨機分組</button>
+<button onclick="drawAndGroup()">🎯 抽籤分組（動畫）</button>
 <button onclick="exportPDF()">🖨️ 匯出 PDF</button>
-<button onclick="toggleFull()">🖥️ 投影模式</button>
 
 <div id="groups"></div>
+<div id="draw"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 <script>
+const drawEl = document.getElementById("draw");
 const studentsEl = document.getElementById("students");
-const banEl = document.getElementById("ban");
-const fixedEl = document.getElementById("fixedBack");
-
-studentsEl.value = localStorage.students || "";
-banEl.value = localStorage.ban || "";
-fixedEl.value = localStorage.fixed || "";
-
-studentsEl.oninput = ()=>localStorage.students = studentsEl.value;
-banEl.oninput = ()=>localStorage.ban = banEl.value;
-fixedEl.oninput = ()=>localStorage.fixed = fixedEl.value;
-
-let groupsData = [];
+let groupsData=[];
 
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){
@@ -122,103 +116,70 @@ function shuffle(a){
   }
 }
 
-function parseLines(el){
-  return el.value.split('\n').map(s=>s.trim()).filter(Boolean);
-}
-
-function validGroup(g,bans){
-  return !bans.some(r => r.every(n => g.includes(n)));
-}
-
-function makeGroups(){
-  let students = parseLines(studentsEl);
-  if(students.length !== 20){
-    alert("⚠️ 固定 20 人（4 組）");
+function drawAndGroup(){
+  let list = studentsEl.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(list.length!==20){
+    alert("⚠️ 需要剛好 20 人（4 組）");
     return;
   }
 
-  const bans = banEl.value.split('\n')
-    .map(l=>l.split(',').map(s=>s.trim()).filter(Boolean))
-    .filter(r=>r.length>=2);
-
-  const fixed = parseLines(fixedEl);
-
-  for(let t=0;t<800;t++){
-    shuffle(students);
-    let tmp=[...students], ok=true, res=[];
-
-    for(let i=0;i<4;i++){
-      let g=tmp.splice(0,5);
-      if(!validGroup(g,bans)) {ok=false;break;}
-
-      const fb = g.filter(n=>fixed.includes(n));
-      if(fb.length>1){ok=false;break;}
-
-      if(fb.length===1){
-        g = g.filter(n=>n!==fb[0]);
-        g.push(fb[0]); // 固定後面
-      }
-      res.push(g);
+  drawEl.style.display="flex";
+  let t=30;
+  const beep = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
+  const timer=setInterval(()=>{
+    drawEl.textContent = list[Math.floor(Math.random()*list.length)];
+    beep.play();
+    t--;
+    if(t<=0){
+      clearInterval(timer);
+      drawEl.classList.add("flash");
+      setTimeout(()=>{
+        drawEl.style.display="none";
+        drawEl.classList.remove("flash");
+        makeGroups(list);
+      },800);
     }
+  },100);
+}
 
-    if(ok){
-      groupsData=res;
-      render();
-      return;
-    }
+function makeGroups(students){
+  shuffle(students);
+  groupsData=[];
+  for(let i=0;i<4;i++){
+    groupsData.push(students.slice(i*5,i*5+5));
   }
-  alert("❌ 規則衝突，請調整設定");
+  render();
 }
 
 function render(){
   const box=document.getElementById("groups");
   box.innerHTML="";
-
-  groupsData.forEach((g,gi)=>{
-    const div=document.createElement("div");
-    div.className="group";
-    div.innerHTML=`
-      <h2>第 ${gi+1} 組</h2>
+  groupsData.forEach((g,i)=>{
+    box.innerHTML+=`
+    <div class="group">
+      <h2>第 ${i+1} 組</h2>
       <div class="face">
-        ${g.slice(0,4).map((n,i)=>`
-          <div class="seat" draggable="true"
-           ondragstart="drag(event,${gi},${i})"
-           ondragover="event.preventDefault()"
-           ondrop="drop(event,${gi},${i})">${n}</div>`).join("")}
+        <div class="seat">${g[0]}</div>
+        <div class="seat">${g[1]}</div>
+        <div class="seat">${g[2]}</div>
+        <div class="seat">${g[3]}</div>
       </div>
       <div class="back">${g[4]}</div>
-    `;
-    box.appendChild(div);
+    </div>`;
   });
 }
 
-let dragInfo=null;
-function drag(e,g,i){ dragInfo={g,i}; }
-function drop(e,g,i){
-  if(!dragInfo || dragInfo.g!==g) return;
-  [groupsData[g][dragInfo.i],groupsData[g][i]]=
-  [groupsData[g][i],groupsData[g][dragInfo.i]];
-  render();
-}
-
+/* PDF：畫面轉檔（不會亂碼） */
 function exportPDF(){
   const { jsPDF } = window.jspdf;
-  const pdf=new jsPDF();
-  let y=20;
-
-  groupsData.forEach((g,i)=>{
-    pdf.setFontSize(14);
-    pdf.text(`第 ${i+1} 組`,10,y); y+=8;
-    g.forEach(n=>{ pdf.text("• "+n,14,y); y+=7; });
-    y+=5;
+  html2canvas(document.getElementById("groups")).then(canvas=>{
+    const pdf=new jsPDF("p","mm","a4");
+    const img=canvas.toDataURL("image/png");
+    const w=190;
+    const h=canvas.height*w/canvas.width;
+    pdf.addImage(img,"PNG",10,10,w,h);
+    pdf.save("分組座位表.pdf");
   });
-
-  pdf.save("分組座位表.pdf");
-}
-
-function toggleFull(){
-  document.body.classList.toggle("fullscreen");
-  document.documentElement.requestFullscreen?.();
 }
 </script>
 
