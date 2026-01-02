@@ -31,7 +31,7 @@ button:disabled{opacity:.5;}
 <textarea id="female" rows="6" placeholder="女生名單（10 人，每行一人）"></textarea>
 <textarea id="ban" rows="3" placeholder="不能同一組，每行一條，用 , 分隔"></textarea>
 
-<button onclick="makeGroups()">生成分組</button>
+<button id="generateBtn" onclick="makeGroups()">生成小組</button>
 <button onclick="toggleFull()">🖥️ 投影模式</button>
 <button onclick="switchColumn()">📊 直排模式</button>
 <button onclick="exportPDF()">🖨️ 匯出 PDF</button>
@@ -76,6 +76,11 @@ function makeGroups(){
     if(ok){groupsData=res;success=true;break;}
   }
   if(!success){alert("❌ 規則衝突，無法完成分組"); return;}
+
+  // 生成後保持當前模式，更新生成按鈕文字
+  const genBtn = document.getElementById("generateBtn");
+  genBtn.textContent = columnMode ? "生成直排" : "生成小組";
+
   render();
 }
 
@@ -84,12 +89,11 @@ function render(){
   const box=document.getElementById("groups");
   box.innerHTML="";
   if(columnMode){
-    // 直排模式 4 排 × 5 人
     const allStudents = groupsData.flat();
     for(let r=0;r<4;r++){
       const rowDiv=document.createElement("div");
       rowDiv.className="group";
-      rowDiv.innerHTML=`<h2>第 ${r+1} 排</h2>`; // 顯示 "排"
+      rowDiv.innerHTML=`<h2>第 ${r+1} 排</h2>`;
       const faceDiv=document.createElement("div");
       faceDiv.className="face";
       faceDiv.style.gridTemplateColumns="repeat(5,1fr)";
@@ -112,12 +116,11 @@ function render(){
       box.appendChild(rowDiv);
     }
   } else {
-    // 小組模式
     groupsData.forEach((g,i)=>{
       const div=document.createElement("div");
       div.className="group";
       div.innerHTML=`
-        <h2>第 ${i+1} 組</h2>  <!-- 顯示 "組" -->
+        <h2>第 ${i+1} 組</h2>
         <div class="face">
           <div class="seat" draggable="true" ondragstart="drag(event,${i},0)" ondragover="event.preventDefault()" ondrop="drop(event,${i},0)">${g[0]}</div>
           <div class="seat" draggable="true" ondragstart="drag(event,${i},1)" ondragover="event.preventDefault()" ondrop="drop(event,${i},1)">${g[1]}</div>
@@ -151,8 +154,14 @@ function toggleFull(){
 function switchColumn(){
   columnMode=!columnMode;
   render();
-  const btn = document.querySelector("button[onclick='switchColumn()']");
-  btn.textContent = columnMode ? "📊 小組模式" : "📊 直排模式";
+
+  // 模式切換按鈕文字
+  const modeBtn = document.querySelector("button[onclick='switchColumn()']");
+  modeBtn.textContent = columnMode ? "📊 小組模式" : "📊 直排模式";
+
+  // 生成按鈕文字隨模式變
+  const genBtn = document.getElementById("generateBtn");
+  genBtn.textContent = columnMode ? "生成直排" : "生成小組";
 }
 
 // PDF 匯出
@@ -198,8 +207,10 @@ function resetAll(){
     document.getElementById("groups").innerHTML="";
     groupsData=[];
     columnMode=false;
-    const btn = document.querySelector("button[onclick='switchColumn()']");
-    btn.textContent = "📊 直排模式";
+    const modeBtn = document.querySelector("button[onclick='switchColumn()']");
+    modeBtn.textContent = "📊 直排模式";
+    const genBtn = document.getElementById("generateBtn");
+    genBtn.textContent = "生成小組";
     maleEl.scrollIntoView({behavior:"smooth"});
     maleEl.focus();
   }
@@ -208,3 +219,4 @@ function resetAll(){
 
 </body>
 </html>
+
