@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -89,7 +89,7 @@ function render(){
     for(let r=0;r<4;r++){
       const rowDiv=document.createElement("div");
       rowDiv.className="group";
-      rowDiv.innerHTML=`<h2>第 ${r+1} 排</h2>`;
+      rowDiv.innerHTML=`<h2>第 ${r+1} 排</h2>`; // 顯示 "排"
       const faceDiv=document.createElement("div");
       faceDiv.className="face";
       faceDiv.style.gridTemplateColumns="repeat(5,1fr)";
@@ -112,12 +112,12 @@ function render(){
       box.appendChild(rowDiv);
     }
   } else {
-    // 教室模式
+    // 小組模式
     groupsData.forEach((g,i)=>{
       const div=document.createElement("div");
       div.className="group";
       div.innerHTML=`
-        <h2>第 ${i+1} 組</h2>
+        <h2>第 ${i+1} 組</h2>  <!-- 顯示 "組" -->
         <div class="face">
           <div class="seat" draggable="true" ondragstart="drag(event,${i},0)" ondragover="event.preventDefault()" ondrop="drop(event,${i},0)">${g[0]}</div>
           <div class="seat" draggable="true" ondragstart="drag(event,${i},1)" ondragover="event.preventDefault()" ondrop="drop(event,${i},1)">${g[1]}</div>
@@ -147,10 +147,12 @@ function toggleFull(){
   }
 }
 
-// 直排模式切換
+// 直排模式切換 + 按鈕文字自動切換
 function switchColumn(){
   columnMode=!columnMode;
   render();
+  const btn = document.querySelector("button[onclick='switchColumn()']");
+  btn.textContent = columnMode ? "📊 小組模式" : "📊 直排模式";
 }
 
 // PDF 匯出
@@ -196,6 +198,8 @@ function resetAll(){
     document.getElementById("groups").innerHTML="";
     groupsData=[];
     columnMode=false;
+    const btn = document.querySelector("button[onclick='switchColumn()']");
+    btn.textContent = "📊 直排模式";
     maleEl.scrollIntoView({behavior:"smooth"});
     maleEl.focus();
   }
@@ -204,4 +208,3 @@ function resetAll(){
 
 </body>
 </html>
-
